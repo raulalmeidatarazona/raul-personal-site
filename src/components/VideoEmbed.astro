@@ -1,0 +1,63 @@
+---
+interface Props {
+  title: string;
+  thumbnail: string;
+  embedUrl: string;
+  sourceUrl: string;
+  sourceLabel: string;
+  playLabel?: string;
+}
+const { title, thumbnail, embedUrl, sourceUrl, sourceLabel, playLabel = 'Play here' } = Astro.props;
+---
+<div class="video-embed" data-video-embed data-embed-url={embedUrl} data-video-title={title}>
+  <div class="video-stage">
+    <button class="video-poster" type="button" aria-label={`Play ${title} on this page`} data-video-play>
+      <img src={thumbnail} width="1280" height="720" loading="lazy" decoding="async" alt=""/>
+      <span class="play-label"><span aria-hidden="true">▶</span><span>{playLabel}</span></span>
+    </button>
+  </div>
+  <div class="player-controls">
+    <a class="text-link" href={sourceUrl} target="_blank" rel="noopener noreferrer">{sourceLabel} <span aria-hidden="true">↗</span></a>
+    <button type="button" class="player-close" data-video-close hidden>Close player</button>
+  </div>
+  <p class="player-privacy">The external player loads only when you press play. You can also open the original source.</p>
+</div>
+<script>
+document.querySelectorAll<HTMLElement>('[data-video-embed]').forEach(container => {
+  const play = container.querySelector<HTMLButtonElement>('[data-video-play]')!;
+  const close = container.querySelector<HTMLButtonElement>('[data-video-close]')!;
+  const stage = container.querySelector<HTMLElement>('.video-stage')!;
+  play.addEventListener('click', () => {
+    if (stage.querySelector('iframe')) return;
+    const frame = document.createElement('iframe');
+    frame.src = container.dataset.embedUrl!;
+    frame.title = container.dataset.videoTitle!;
+    frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    frame.allowFullscreen = true;
+    frame.referrerPolicy = 'strict-origin-when-cross-origin';
+    play.hidden = true;
+    close.hidden = false;
+    stage.append(frame);
+    frame.focus();
+  });
+  close.addEventListener('click', () => {
+    stage.querySelector('iframe')?.remove();
+    close.hidden = true;
+    play.hidden = false;
+    play.focus();
+  });
+});
+</script>
+<style>
+  .video-stage { position: relative; aspect-ratio: 16 / 9; background: var(--forest); border-radius: 6px; overflow: hidden; }
+  .video-poster { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; color: var(--forest); }
+  .video-poster[hidden], .player-close[hidden] { display: none; }
+  .video-poster img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .2s; }
+  .video-poster:hover img { transform: scale(1.025); }
+  .video-poster:focus-visible { outline: 3px solid var(--paper); outline-offset: -6px; }
+  .video-stage :global(iframe) { display: block; width: 100%; height: 100%; border: 0; position: absolute; inset: 0; }
+  .player-controls { display: flex; justify-content: space-between; gap: 15px; align-items: center; flex-wrap: wrap; margin-top: 5px; }
+  .player-close { padding: 10px 4px; min-height: 44px; cursor: pointer; border: 0; background: transparent; font-size: 11px; color: var(--muted); text-decoration: underline; text-underline-offset: 4px; }
+  .player-privacy { font-size: 10px; line-height: 1.6; color: var(--muted); margin: 7px 0 0; }
+  @media(prefers-reduced-motion: reduce) { .video-poster img { transition: none; } }
+</style>

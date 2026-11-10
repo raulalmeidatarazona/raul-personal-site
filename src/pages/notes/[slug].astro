@@ -1,0 +1,23 @@
+---
+import Layout from '../../layouts/Layout.astro';
+export function getStaticPaths() { return [
+ {params:{slug:'retries-are-not-a-strategy'},props:{title:'Retries are not a consistency strategy.',category:'RELIABILITY / BACKEND',paragraphs:[
+ 'A client sends a payment request. The server commits it, but the connection drops before the response arrives. The client sees a timeout. The database sees a completed operation.',
+ 'Retrying is reasonable. Treating the retry as a new operation is not. The timeout tells us that the client does not know the outcome; it does not tell us that nothing happened.',
+ 'An idempotency key gives repeated requests a shared identity. Store the operation result durably, and make the uniqueness rule hold at the database boundary. A check followed by an unrelated insert is not enough under concurrency.',
+ 'The balance change and the operation record should commit together. For a wallet, locking the account row can also serialize competing operations. Check the idempotency key after acquiring the lock, so a waiting request can observe the committed result.',
+ 'Then test the uncomfortable paths: simultaneous requests, a lost response, and reuse of a key with a different payload. Decide explicitly whether that last case returns the previous result or is rejected; for a money operation, silently accepting a changed payload is dangerous.',
+ 'This does not make every external side effect exactly-once. For a transaction that must also publish an event, an outbox and idempotent consumer may be appropriate. The point is to name the boundary of the guarantee, not to pretend the network has stopped failing.'
+ ]}},
+ {params:{slug:'using-ai-without-outsourcing-judgement'},props:{title:'Use AI. Keep the judgement.',category:'AI / ENGINEERING PRACTICE',paragraphs:[
+ 'An agent can produce a convincing implementation faster than I can review it. That makes review a design constraint, not an optional final step.',
+ 'Start with a small, observable outcome. Define the contract, important edge cases and what evidence would demonstrate that the change works. Give the agent a bounded task instead of asking it to build the whole system in one pass.',
+ 'Separate decisions from execution. I remain responsible for transaction boundaries, failure behaviour, security and trade-offs. The agent can search, implement, run tests and suggest alternatives. A confident explanation is not evidence that any of those actions actually happened.',
+ 'Verify the smallest meaningful thing first: a failing regression test, the relevant integration path, or the precise concurrency scenario. Broader checks matter too, but a large passing suite does not prove that an untested failure mode is safe.',
+ 'Keep the record honest. Distinguish what I decided, what the agent executed and what the output demonstrates. If a check could not run, record the limit instead of turning an assumption into a result.',
+ 'The useful question is not how much code the model generated. It is whether the workflow delivered a change that I understand, can reproduce and can defend.'
+ ]}}
+ ]; }
+const { title, category, paragraphs } = Astro.props;
+---
+<Layout title={`${title} — Raúl Almeida`} description={paragraphs[0]}><article class="essay wrap"><a class="text-link" href="/#notes">← All notes</a><div class="eyebrow">{category} · FIRST-EDITION DRAFT</div><h1>{title}</h1><p class="essay-byline mono">RAÚL ALMEIDA / ENGINEERING NOTES</p><div class="prose">{paragraphs.map((p: string)=><p>{p}</p>)}</div><div class="essay-end"><p>A useful system starts with an explicit decision.</p><a class="text-link" href="mailto:raul.almeida@arsoluciondigital.com">Discuss this note ↗</a></div></article></Layout>
