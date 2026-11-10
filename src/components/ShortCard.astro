@@ -1,0 +1,23 @@
+---
+import VideoEmbed from './VideoEmbed.astro';
+import type { ShortVideo } from '../data/videos';
+interface Props {
+  video: ShortVideo;
+  sequence?: number;
+}
+const { video, sequence } = Astro.props;
+const minutes = Math.floor(video.durationSeconds / 60);
+const seconds = video.durationSeconds % 60;
+---
+<article class="short-card" data-short-id={video.id}>
+  <div class="short-meta mono">
+    <span>{sequence !== undefined ? `${String(sequence).padStart(2, '0')} / ` : ''}{video.topic}</span>
+    <time datetime={`PT${minutes}M${seconds}S`}>{minutes}:{String(seconds).padStart(2, '0')}</time>
+  </div>
+  <VideoEmbed portrait title={video.originalTitle} thumbnail={`/images/shorts/${video.id}.jpg`} embedUrl={`https://www.youtube-nocookie.com/embed/${video.id}?autoplay=1&playsinline=1&rel=0`} sourceUrl={`https://www.youtube.com/shorts/${video.id}`} sourceLabel="Open on YouTube" playLabel="Watch short" />
+  <div class="short-copy">
+    <span class="eyebrow">Audio in Spanish</span>
+    <h3>{video.title}</h3>
+    <p>{video.summary}</p>
+  </div>
+</article>

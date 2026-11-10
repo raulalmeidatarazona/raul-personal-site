@@ -6,10 +6,11 @@ interface Props {
   sourceUrl: string;
   sourceLabel: string;
   playLabel?: string;
+  portrait?: boolean;
 }
-const { title, thumbnail, embedUrl, sourceUrl, sourceLabel, playLabel = 'Play here' } = Astro.props;
+const { title, thumbnail, embedUrl, sourceUrl, sourceLabel, playLabel = 'Play here', portrait = false } = Astro.props;
 ---
-<div class="video-embed" data-video-embed data-embed-url={embedUrl} data-video-title={title}>
+<div class:list={['video-embed', { 'video-portrait': portrait }]} data-video-embed data-embed-url={embedUrl} data-video-title={title}>
   <div class="video-stage">
     <button class="video-poster" type="button" aria-label={`Play ${title} on this page`} data-video-play>
       <img src={thumbnail} width="1280" height="720" loading="lazy" decoding="async" alt=""/>
@@ -50,6 +51,7 @@ document.querySelectorAll<HTMLElement>('[data-video-embed]').forEach(container =
 </script>
 <style>
   .video-stage { position: relative; aspect-ratio: 16 / 9; background: var(--forest); border-radius: 6px; overflow: hidden; }
+  .video-portrait .video-stage { aspect-ratio: 9 / 16; }
   .video-poster { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; color: var(--forest); }
   .video-poster[hidden], .player-close[hidden] { display: none; }
   .video-poster img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .2s; }

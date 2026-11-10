@@ -20,11 +20,16 @@ npm run preview
 
 The production build is static and written to `dist/`. The preview server listens on `127.0.0.1:4321`.
 
+After building, run `node --test tests/videos.test.mjs` to verify the six-video catalogue, featured selection, source links, local assets and absence of initially loaded players.
+
 For a temporary external review, run `ngrok http 4321` while the preview is running. Expose only this site's server, not a workspace directory. No deployment or hosting service is configured in this repository.
 
 ## Structure
 
-- `src/pages/index.astro`: portfolio, talks, about and contact.
+- `src/pages/index.astro`: portfolio, selected Shorts, talks, about and contact.
+- `src/pages/videos.astro`: the complete editorially ordered short-video collection.
+- `src/data/videos.ts`: YouTube IDs, original titles, English summaries, verified durations and featured ranks. Add new Shorts here and their local thumbnails under `public/images/shorts/`.
+- `src/components/ShortCard.astro`: shared vertical video card.
 - `src/pages/notes/[slug].astro`: first-edition draft articles.
 - `src/components/VideoEmbed.astro`: click-to-load YouTube/VideoPress players with persistent original-source links and accessible close controls.
 - `src/styles/`: shared visual tokens and responsive styles.

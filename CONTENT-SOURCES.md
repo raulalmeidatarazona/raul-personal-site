@@ -1,5 +1,24 @@
 # Photo and speaking sources
 
+## Short-video collection
+
+Channel supplied by Raúl: https://www.youtube.com/@raulalmeida5710/shorts
+
+The six public Shorts were inventoried and their durations checked against YouTube player metadata. Automatic Spanish transcripts informed the editorial summaries; English titles are site copy, not replacements for original YouTube titles. Original titles are retained in `src/data/videos.ts` and used for player labels.
+
+Suggested watching order (not an existing YouTube playlist or a complete course):
+
+1. https://www.youtube.com/shorts/EJ5NpxJ_SGU — 1:51
+2. https://www.youtube.com/shorts/b7IqZczTcGI — 1:03
+3. https://www.youtube.com/shorts/VnLj11LXxzo — 1:28
+4. https://www.youtube.com/shorts/GbBUQexIUrs — 2:31
+5. https://www.youtube.com/shorts/wnF2yn-QjWM — 1:54
+6. https://www.youtube.com/shorts/QD0J1roHq5o — 1:47
+
+Home features modernisation, demand spikes and AI, in that order. All recordings retain their original Spanish audio. No YouTube uploads, titles or playlists were changed.
+
+Official thumbnails downloaded from `https://i.ytimg.com/vi/{videoId}/maxresdefault.jpg` into `public/images/shorts/`. Inspected together with the centre-cropped 9:16 display used on the site: faces and main visual material remain visible. Local thumbnails and explicit click-to-load YouTube privacy-enhanced embeds preserve the existing player behaviour.
+
 ## Portrait
 
 User-supplied existing portrait, copied unchanged to `public/images/raul-almeida-portrait.jpg`. Inspected before use. No AI retouching applied.
