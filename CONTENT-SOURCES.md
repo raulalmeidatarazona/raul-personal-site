@@ -1,4 +1,20 @@
-# Photo and speaking sources
+# Content sources
+
+## Imported published articles
+
+Source publication: https://raulalmeidablog.substack.com/ (currently reached from https://raulalmeida.com/).
+Public export: https://raulalmeidablog.substack.com/feed
+Inventory cross-check: the public archive API returned six posts and `nextCursor: null`; all six match the import.
+
+The full RSS article bodies were imported, not scraped summaries. Original titles, publication timestamps and languages are recorded in `src/data/articles.json`. Four English articles form the existing legacy/outbox/CDC/event-consumer sequence; the two workflow articles remain in Spanish. Summaries and series labels are editorial navigation, not changes to the original article bodies.
+
+All 51 preformatted blocks were checked against the source without changing their text. All 78 inline image occurrences have local copies under `public/images/articles/`. A separate tree-based comparison confirmed that article text is unchanged after excluding Substack subscription/share controls. Sanitisation removes platform controls, scripts, forms, inline styling and unsafe attributes; body-level `h1` headings become `h2` to retain one page title. Source alt text is preserved; missing descriptions were not invented.
+
+Article files: `src/articles/*.html`. Import tool: `scripts/import_substack.py`, using a public RSS export supplied as a local input. The original export and verification scratch files are not part of the repository. Content hashes, source image URLs and the local image mapping are included in the article catalogue.
+
+Imported routes retain the original `/p/{slug}/` path pattern. Every imported article keeps a canonical link to its existing Substack source and `noindex,follow` until a separate article migration is approved. The portfolio is deployed independently (see `DEPLOYMENT.md`); Substack settings and subscriber records have not been changed. Before migrating the publication, explicitly review article canonicals, indexing, redirects and the role of Substack.
+
+The two first-edition draft notes remain available at their existing URLs but are no longer featured. The home page highlights three published articles; `/notes/` lists the complete archive and ordered series. Import verification is not a new technical audit or a claim that published benchmarks have been independently reproduced.
 
 ## Short-video collection
 

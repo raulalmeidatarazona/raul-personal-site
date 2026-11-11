@@ -1,0 +1,473 @@
+[
+  {
+    "slug": "idempotent-consumers-anti-corruption",
+    "title": "Idempotent Consumers, Anti-Corruption Layers, and Read Replicas for AI Agents",
+    "sourceUrl": "https://raulalmeidablog.substack.com/p/idempotent-consumers-anti-corruption",
+    "publishedAt": "2026-09-10T15:43:54Z",
+    "language": "en",
+    "topic": "Reliability & AI",
+    "summary": "Handle repeated events, protect the domain model and separate analytical reads from operational writes.",
+    "seriesPosition": 4,
+    "sourceImageCount": 24,
+    "sourceCodeBlockCount": 18,
+    "codeBlockSha256": [
+      "72e7e7bcf097703f9f7d921fe93360fdf026af553d974a230ae1edd695a27acd",
+      "ee69776dd879acd8bd18a9dc8f0eaecc038a44a08fcf1a5ef4d189e721ab2a0c",
+      "853d726681b5e6fcebc897772c59b5b1dc35823e16317b8c49eee16af7295dac",
+      "20f65c28671b40937c5bf23acc7c6f37e5a5ec0622e347b57685725df5ba9e50",
+      "10fd874b68dad080ed706762c8e163dabb20514bddae38fb159c56f714a3b143",
+      "f140392342ff1d22f613cb4ef4d03df898fae5952914f35602f04bf4d52127ae",
+      "52a94a6ce8f688e1308c9ded7961a4ba7e49abc09bc78e965ceb63d1763dcad0",
+      "7fef7a54b1bca641584b5d44130411c71465b482da3f3d0a733d231369e1917b",
+      "6755d3efe53beeeec9e8ac6619d2d7d6b4e1e5fec483e17c50e24c9065a978ba",
+      "79faa30ca4e8a0c559f98f40548a8dd059906492cbc5cb9d1fbfec192c0c96e2",
+      "a000f2eec448d0478bfece690fb35dc0763b4cb5701f587c6aa72b4bba593fc6",
+      "8fec84f06a59bbf2d68ce3d7dcf489f9cf639c72437fa6e09d94c112d5329424",
+      "87db63b21f4957e695bb7514e9429268e225da79faa24828097801016ff03557",
+      "ccef4fe06a9ba68f5ae423c925e1b9c1b4081fc65b4279a07302b4a2d33c0c1b",
+      "38e78c0cb33e3ca3be8dc6bc218dff40ed5ec580dc964b32d98c6272c53f5776",
+      "fcc4a589e59d156a3d41fb295475c3f87e0278cf9c2e261b15579762dcae2fe5",
+      "c14fe4ba74d9028fc8b51cd93f4fc60135eb7f3017e7c415c3047811a1e1fce3",
+      "ab49911a269cebaa18a1df440680bf947ae28c2c692cf871a8a677c2e886428f"
+    ],
+    "sourceBodySha256": "a3ced6be326faabbeebe0452c753933bcd90537c9217149751aaaee4ac837e57",
+    "bodySha256": "872e696bf0cf0a6dee553a018bc786663ade9b6193914f48087c6ca1bd4e87f9",
+    "images": [
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/0bda58ca-fd72-4af1-a90d-a6faaa4af1b7_1706x94.png",
+        "localPath": "/images/articles/0bda58ca-fd72-4af1-a90d-a6faaa4af1b7_1706x94.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/0faae845-995f-47cd-912f-56e4e2023c10_690x254.png",
+        "localPath": "/images/articles/0faae845-995f-47cd-912f-56e4e2023c10_690x254.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/2566bad2-9d34-45b9-8718-29b29641cddf_958x278.png",
+        "localPath": "/images/articles/2566bad2-9d34-45b9-8718-29b29641cddf_958x278.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/33c5aa23-ab35-49e9-93c2-0fc1bf453c93_168x373.png",
+        "localPath": "/images/articles/33c5aa23-ab35-49e9-93c2-0fc1bf453c93_168x373.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/38a427c8-ac20-4217-8374-7ab0f3471036_881x578.png",
+        "localPath": "/images/articles/38a427c8-ac20-4217-8374-7ab0f3471036_881x578.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/3d43d048-108b-4046-9044-2cf062e82692_457x235.png",
+        "localPath": "/images/articles/3d43d048-108b-4046-9044-2cf062e82692_457x235.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/3f75b400-e469-4fc0-8a91-d1312aab05c7_1030x94.png",
+        "localPath": "/images/articles/3f75b400-e469-4fc0-8a91-d1312aab05c7_1030x94.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/3f81c4d8-4859-424d-8f3d-112489c03bb7_1904x88.png",
+        "localPath": "/images/articles/3f81c4d8-4859-424d-8f3d-112489c03bb7_1904x88.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/5734484b-832e-425e-9552-952677d2c4ef_451x808.png",
+        "localPath": "/images/articles/5734484b-832e-425e-9552-952677d2c4ef_451x808.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/81d7451e-6256-448e-9faa-580b5f2e2dbd_275x404.png",
+        "localPath": "/images/articles/81d7451e-6256-448e-9faa-580b5f2e2dbd_275x404.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/83397725-c8f2-4cab-94c6-4fd6b9282c62_833x582.png",
+        "localPath": "/images/articles/83397725-c8f2-4cab-94c6-4fd6b9282c62_833x582.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/84d5450e-d377-4389-838c-9d925484b0ef_499x87.png",
+        "localPath": "/images/articles/84d5450e-d377-4389-838c-9d925484b0ef_499x87.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/8b0b6f8f-7337-4902-96e5-76917c77127e_138x278.png",
+        "localPath": "/images/articles/8b0b6f8f-7337-4902-96e5-76917c77127e_138x278.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/991f1815-3f17-473b-af6d-0d5da42e4cfe_924x70.png",
+        "localPath": "/images/articles/991f1815-3f17-473b-af6d-0d5da42e4cfe_924x70.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/a5d857a3-6888-4f04-a531-b46f357aac9e_1704x588.png",
+        "localPath": "/images/articles/a5d857a3-6888-4f04-a531-b46f357aac9e_1704x588.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/b3f44cb4-bc24-45ee-8feb-db5574dd721c_673x168.png",
+        "localPath": "/images/articles/b3f44cb4-bc24-45ee-8feb-db5574dd721c_673x168.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/b671a8ec-9757-4b0f-a54e-fa1e8f98832f_228x470.png",
+        "localPath": "/images/articles/b671a8ec-9757-4b0f-a54e-fa1e8f98832f_228x470.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/c89dc1b8-41fc-4c3d-8807-1b5eef903c2c_926x67.png",
+        "localPath": "/images/articles/c89dc1b8-41fc-4c3d-8807-1b5eef903c2c_926x67.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/d802bc2c-46d0-4296-9bf8-fc723495d193_1138x70.png",
+        "localPath": "/images/articles/d802bc2c-46d0-4296-9bf8-fc723495d193_1138x70.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/da4226b8-e276-4715-bb84-dffc9429d5eb_900x554.png",
+        "localPath": "/images/articles/da4226b8-e276-4715-bb84-dffc9429d5eb_900x554.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/dfd3d3be-146e-4430-abf5-058ca4baae97_445x278.png",
+        "localPath": "/images/articles/dfd3d3be-146e-4430-abf5-058ca4baae97_445x278.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/f26fa490-facd-481f-913b-2833584c6afc_1256x222.png",
+        "localPath": "/images/articles/f26fa490-facd-481f-913b-2833584c6afc_1256x222.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/fca41782-3e2a-4afa-a5d7-618b22074a6c_503x290.png",
+        "localPath": "/images/articles/fca41782-3e2a-4afa-a5d7-618b22074a6c_503x290.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/fd0dabed-49e9-4a85-b45f-520c94455ea5_753x126.png",
+        "localPath": "/images/articles/fd0dabed-49e9-4a85-b45f-520c94455ea5_753x126.png"
+      }
+    ]
+  },
+  {
+    "slug": "from-binlog-to-cloudevents-building",
+    "title": "From BinLog to CloudEvents: Building a Durable Event Streaming Layer with Go, NATS and RabbitMQ",
+    "sourceUrl": "https://raulalmeidablog.substack.com/p/from-binlog-to-cloudevents-building",
+    "publishedAt": "2026-09-10T14:51:29Z",
+    "language": "en",
+    "topic": "Events & messaging",
+    "summary": "Turn database changes into stable event contracts and introduce a durable messaging boundary.",
+    "seriesPosition": 3,
+    "sourceImageCount": 26,
+    "sourceCodeBlockCount": 4,
+    "codeBlockSha256": [
+      "13735b3412b11df3df4d5af6dd3530a4c8989850de9adf239c6c02cd6780a13a",
+      "748a13bc747eed7595ae075550a1471a89e0a36a4feaf68a046e20f84a7fff62",
+      "1a92c37fce24061352774c0f7309bafd9518dc6832453dc9201bf1bab0830187",
+      "3d8a13801e8c813ffb0a5c294491285c12018de8eb89f2b8556d54dc0639b7fd"
+    ],
+    "sourceBodySha256": "926771972fa5ebf4ce7a4010af66e037181596591d8201507aed57f444796ed3",
+    "bodySha256": "ccdb8ba47bc3b4958f5bc6106e28ccbc0d16a1784150ac04b4eb5029cff639a0",
+    "images": [
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/04f5fd6f-c8d7-4c0f-9a69-1cd369880789_161x155.png",
+        "localPath": "/images/articles/04f5fd6f-c8d7-4c0f-9a69-1cd369880789_161x155.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/11bd1ed3-e199-4c21-b771-bdfd5f5ef2bf_1050x349.png",
+        "localPath": "/images/articles/11bd1ed3-e199-4c21-b771-bdfd5f5ef2bf_1050x349.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/15737daa-f464-440d-adef-e54d4c0575a9_437x70.png",
+        "localPath": "/images/articles/15737daa-f464-440d-adef-e54d4c0575a9_437x70.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/1f1a59e5-9914-42ec-b801-d87635e83bbe_797x142.png",
+        "localPath": "/images/articles/1f1a59e5-9914-42ec-b801-d87635e83bbe_797x142.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/360e9c1a-ec44-4fb7-be08-036a4db0d9b5_709x67.png",
+        "localPath": "/images/articles/360e9c1a-ec44-4fb7-be08-036a4db0d9b5_709x67.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/4bb7aa43-203c-4b3f-9eef-5656ccbddda4_322x269.png",
+        "localPath": "/images/articles/4bb7aa43-203c-4b3f-9eef-5656ccbddda4_322x269.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/4c070c8f-7e50-448a-b839-335328a78053_1904x353.png",
+        "localPath": "/images/articles/4c070c8f-7e50-448a-b839-335328a78053_1904x353.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/5c2c6470-2597-45cf-be09-0d7b8cdb83f4_668x351.png",
+        "localPath": "/images/articles/5c2c6470-2597-45cf-be09-0d7b8cdb83f4_668x351.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/615c1fb9-2f2c-4166-92d7-9dcc073f8f17_886x168.png",
+        "localPath": "/images/articles/615c1fb9-2f2c-4166-92d7-9dcc073f8f17_886x168.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/640913eb-9629-4df9-a38e-073deeb5e617_969x776.png",
+        "localPath": "/images/articles/640913eb-9629-4df9-a38e-073deeb5e617_969x776.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/67d6cad2-ed0f-4f93-9e30-3fcd11c44b3d_229x875.png",
+        "localPath": "/images/articles/67d6cad2-ed0f-4f93-9e30-3fcd11c44b3d_229x875.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/6e12a02b-0d79-4269-a3b5-ba674796a37c_246x659.png",
+        "localPath": "/images/articles/6e12a02b-0d79-4269-a3b5-ba674796a37c_246x659.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/76a9ed3f-842a-43ec-b14c-aa85514189fc_514x463.png",
+        "localPath": "/images/articles/76a9ed3f-842a-43ec-b14c-aa85514189fc_514x463.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/78a011c9-d4a7-4083-bbfa-64f3204a9f87_481x269.png",
+        "localPath": "/images/articles/78a011c9-d4a7-4083-bbfa-64f3204a9f87_481x269.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/9c188a61-904a-4117-a613-4965424942d9_182x370.png",
+        "localPath": "/images/articles/9c188a61-904a-4117-a613-4965424942d9_182x370.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/a60ab373-9c52-4972-9343-04249936a28d_1131x142.png",
+        "localPath": "/images/articles/a60ab373-9c52-4972-9343-04249936a28d_1131x142.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/a74c64bc-9fc9-44af-b1de-8e510abdd81d_452x67.png",
+        "localPath": "/images/articles/a74c64bc-9fc9-44af-b1de-8e510abdd81d_452x67.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/aa0a95a4-c159-4140-b222-ec11e1d50a78_359x471.png",
+        "localPath": "/images/articles/aa0a95a4-c159-4140-b222-ec11e1d50a78_359x471.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/b57930ef-f1b7-4f39-a4db-70c815fb0851_1018x77.png",
+        "localPath": "/images/articles/b57930ef-f1b7-4f39-a4db-70c815fb0851_1018x77.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/c5c0a81f-f480-4ea0-9730-bd0cfbed6ea4_176x900.png",
+        "localPath": "/images/articles/c5c0a81f-f480-4ea0-9730-bd0cfbed6ea4_176x900.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/ca479863-026e-4fc5-880d-11ff39202e30_1154x67.png",
+        "localPath": "/images/articles/ca479863-026e-4fc5-880d-11ff39202e30_1154x67.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/d395eddf-37b1-4a5c-a556-ce82d166e674_650x347.png",
+        "localPath": "/images/articles/d395eddf-37b1-4a5c-a556-ce82d166e674_650x347.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/e20d37a1-1f82-4c97-bd33-b9a9a41e639a_928x269.png",
+        "localPath": "/images/articles/e20d37a1-1f82-4c97-bd33-b9a9a41e639a_928x269.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/e42b12c0-93f8-48c7-9a39-2012c91d90a2_1353x460.png",
+        "localPath": "/images/articles/e42b12c0-93f8-48c7-9a39-2012c91d90a2_1353x460.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/ed071c8f-0126-4059-bc44-51f7b122a546_549x198.png",
+        "localPath": "/images/articles/ed071c8f-0126-4059-bc44-51f7b122a546_549x198.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/fb230b65-ad07-49d3-9b9c-9dda139970f1_764x77.png",
+        "localPath": "/images/articles/fb230b65-ad07-49d3-9b9c-9dda139970f1_764x77.png"
+      }
+    ]
+  },
+  {
+    "slug": "building-the-go-streamer-reading",
+    "title": "Building the Go Streamer: Reading MySQL BinLogs with GTIDs",
+    "sourceUrl": "https://raulalmeidablog.substack.com/p/building-the-go-streamer-reading",
+    "publishedAt": "2026-09-09T19:47:57Z",
+    "language": "en",
+    "topic": "Go & change data capture",
+    "summary": "Follow MySQL BinLogs with GTIDs, checkpointing and a bounded pipeline instead of introducing another polling loop.",
+    "seriesPosition": 2,
+    "sourceImageCount": 20,
+    "sourceCodeBlockCount": 12,
+    "codeBlockSha256": [
+      "186f1a43b490690c33e8f3d9dc72c6ccb32cbfd6ec46dc379594f0555bd22474",
+      "8d0b1eb35700c54296dd12ed9e289347e123b6093f1b4b764852b0b2c244c00f",
+      "9ae5c0f56e2ad098afb855dfae3ddeb94a715c0754ac6a02b699068180b900c2",
+      "eb59d9bdd47c1fff80b2a71628dcb059b82a3bab47e09cfe03323df3c4642526",
+      "132fbc62b07e0b4da83fb9fe7c92662663c43fc74c33be2248e96627c5fea4f7",
+      "97ec7147ab272a1cd6279730c444039b2cc1c7b11a9738b137747809ab3ec0e9",
+      "dad4b935cd1553ee8cc52fc04944a363f89732e434c1a434075eeca0f1001014",
+      "5b874b89ea3dd194a6be583e62121c0850b4b3509d3137b9cbb615ab6354de2a",
+      "6a647023c22ed021109b49580c015477e7d8a3f019d4f49fbb625106f782aad3",
+      "8d0b1eb35700c54296dd12ed9e289347e123b6093f1b4b764852b0b2c244c00f",
+      "d47df898bcd8a67fb98c4db157fba1522792e7de6a68c23fb2f52bbcc010c98d",
+      "5ba83f9f05afca724d132d737413cba6c5395e9b18f19a5ce19e71891115bef9"
+    ],
+    "sourceBodySha256": "f0aafdcf1a9cc59eb6a5529f8e3ce6412dfa4494fc86ab7ea1128116257a611b",
+    "bodySha256": "41a209b4c62ba264d8f9e8e5c02ff3137b9a9b9e88fb36492355795668b0f4f1",
+    "images": [
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/085cc698-4c3b-4dba-bdf3-52e3667b8a9a_998x82.png",
+        "localPath": "/images/articles/085cc698-4c3b-4dba-bdf3-52e3667b8a9a_998x82.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/1877d981-0071-4523-8848-7c9a91b1944e_747x94.png",
+        "localPath": "/images/articles/1877d981-0071-4523-8848-7c9a91b1944e_747x94.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/1cd0a676-d096-47ad-bcc0-6c891d756ce6_209x673.png",
+        "localPath": "/images/articles/1cd0a676-d096-47ad-bcc0-6c891d756ce6_209x673.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/29012b91-ef94-4c20-b010-0fa808834d0f_977x278.png",
+        "localPath": "/images/articles/29012b91-ef94-4c20-b010-0fa808834d0f_977x278.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/2c56710e-6db8-42b9-8773-ac78ee8af346_1250x90.png",
+        "localPath": "/images/articles/2c56710e-6db8-42b9-8773-ac78ee8af346_1250x90.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/444bd264-af46-44f8-a9a7-55cced53fe2a_872x349.png",
+        "localPath": "/images/articles/444bd264-af46-44f8-a9a7-55cced53fe2a_872x349.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/5758821c-45be-486f-ae72-d1e4475d7622_209x774.png",
+        "localPath": "/images/articles/5758821c-45be-486f-ae72-d1e4475d7622_209x774.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/6f5ef4bd-e93a-4b89-a6d0-c4dc9b5f12f1_682x187.png",
+        "localPath": "/images/articles/6f5ef4bd-e93a-4b89-a6d0-c4dc9b5f12f1_682x187.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/710b900c-aad9-4bba-885e-1feda0dae961_230x572.png",
+        "localPath": "/images/articles/710b900c-aad9-4bba-885e-1feda0dae961_230x572.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/7283d955-8979-49e8-94d7-8913430ed8fd_561x185.png",
+        "localPath": "/images/articles/7283d955-8979-49e8-94d7-8913430ed8fd_561x185.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/80d6c1a2-d8c9-44b6-8ad1-c0f5f5b421fc_271x471.png",
+        "localPath": "/images/articles/80d6c1a2-d8c9-44b6-8ad1-c0f5f5b421fc_271x471.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/89db4f15-0c45-442c-afb5-cc1f5474b5b6_1904x479.png",
+        "localPath": "/images/articles/89db4f15-0c45-442c-afb5-cc1f5474b5b6_1904x479.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/9a4c6be2-c17a-4faa-8365-fd881bd6c481_349x1074.png",
+        "localPath": "/images/articles/9a4c6be2-c17a-4faa-8365-fd881bd6c481_349x1074.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/ae85ed65-aab8-482c-bc9a-c41b10dc3f9f_667x174.png",
+        "localPath": "/images/articles/ae85ed65-aab8-482c-bc9a-c41b10dc3f9f_667x174.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/b122dc20-7e46-491b-a8e7-b799d41b57c0_1365x140.png",
+        "localPath": "/images/articles/b122dc20-7e46-491b-a8e7-b799d41b57c0_1365x140.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/b1d13c83-70b4-46ae-b356-6a5b3730c9fa_1599x348.png",
+        "localPath": "/images/articles/b1d13c83-70b4-46ae-b356-6a5b3730c9fa_1599x348.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/d2349443-f5da-4825-a613-c92588a2b9f1_1811x264.png",
+        "localPath": "/images/articles/d2349443-f5da-4825-a613-c92588a2b9f1_1811x264.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/d9181897-0229-4296-9833-84258b4904b4_173x471.png",
+        "localPath": "/images/articles/d9181897-0229-4296-9833-84258b4904b4_173x471.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/f6de8f31-2883-403a-bbaf-d30d37bfb0bc_309x382.png",
+        "localPath": "/images/articles/f6de8f31-2883-403a-bbaf-d30d37bfb0bc_309x382.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/f87d64d3-cf95-4096-8238-273890a0246a_710x370.png",
+        "localPath": "/images/articles/f87d64d3-cf95-4096-8238-273890a0246a_710x370.png"
+      }
+    ]
+  },
+  {
+    "slug": "the-polling-tax-how-to-decouple-legacy",
+    "title": "The Polling Tax: How to Decouple Legacy ERPs with Triggers and Outbox Without Rewriting a Single Line",
+    "sourceUrl": "https://raulalmeidablog.substack.com/p/the-polling-tax-how-to-decouple-legacy",
+    "publishedAt": "2026-09-09T18:35:19Z",
+    "language": "en",
+    "topic": "Legacy & integrations",
+    "summary": "Capture relevant changes with triggers and a transactional outbox, without rewriting the legacy application.",
+    "seriesPosition": 1,
+    "sourceImageCount": 6,
+    "sourceCodeBlockCount": 3,
+    "codeBlockSha256": [
+      "0b484decef2177293cb8bcb9ffc5a95d255c4471697518c5144b598eb31e83de",
+      "1b54f90c2bb4895a95f6564d7bc1f45f84a80f34a2ea073dee2419c1ec8163c7",
+      "a8b2a6fb636d68ca311a422dcd5fb397654c1154782f67535d7d207a8503e7e1"
+    ],
+    "sourceBodySha256": "7723cf1fac5c1901df3c61fddadc421ff4d73c8ca5b97dfa7c810bb0fba1dc23",
+    "bodySha256": "75e7fc634a195965e2081a691ccfff82fd0116b5eeadd5d241f2abfd7d0ef1c0",
+    "images": [
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/27bda3b6-7780-4067-b7dd-f44f9c79e9e3_259x471.png",
+        "localPath": "/images/articles/27bda3b6-7780-4067-b7dd-f44f9c79e9e3_259x471.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/3b4daa52-a678-4b8d-a5c6-6ffeec34948d_409x407.png",
+        "localPath": "/images/articles/3b4daa52-a678-4b8d-a5c6-6ffeec34948d_409x407.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/44a22fa2-cab5-44cb-a01e-87433c3b43fa_360x269.png",
+        "localPath": "/images/articles/44a22fa2-cab5-44cb-a01e-87433c3b43fa_360x269.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/50bcf19d-fe83-46d6-9166-88be393877c0_261x370.png",
+        "localPath": "/images/articles/50bcf19d-fe83-46d6-9166-88be393877c0_261x370.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/9e6bdc5e-b193-4083-814e-0f67ce24b171_614x1160.png",
+        "localPath": "/images/articles/9e6bdc5e-b193-4083-814e-0f67ce24b171_614x1160.png"
+      },
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/c8d0d315-138f-413e-bfd8-41e75fc7b985_2628x920.png",
+        "localPath": "/images/articles/c8d0d315-138f-413e-bfd8-41e75fc7b985_2628x920.png"
+      }
+    ]
+  },
+  {
+    "slug": "estrategias-comprobadas-para-reducir",
+    "title": "Estrategias Comprobadas para Reducir Tiempos de Pruebas en CI/CD",
+    "sourceUrl": "https://raulalmeidablog.substack.com/p/estrategias-comprobadas-para-reducir",
+    "publishedAt": "2025-02-10T06:46:47Z",
+    "language": "es",
+    "topic": "Testing & delivery",
+    "summary": "Cómo reducir la espera de las pruebas y los pre-push hooks sin renunciar a las comprobaciones importantes.",
+    "seriesPosition": null,
+    "sourceImageCount": 1,
+    "sourceCodeBlockCount": 8,
+    "codeBlockSha256": [
+      "49ca7ab867b02b5e24d3f6f5670008b02c7f76ba4804d145266ca75801514b26",
+      "6337122e5a512b4b4c9b35df0e2d74580540acde8e595a361b5cebeb4dbb59aa",
+      "bc9f92c70ac04b79b6e1aee474270cb8bac945a1ae70de09459ed9eb411c6c68",
+      "261136258de875c52a227259ce8440def723b0504796141ba1dabfcfa07b5e5e",
+      "c2320695dd104ec78bb8208945b0ecd687100b98e83df7b34a9f7c72e776bfc5",
+      "3d7db6aa6688ca2f5548a68662dcdff699abf21876117952243fc9df9a94a275",
+      "1df19f423c4789472ce485d2c1adda0386411e040a0183afe2f0637b395b8494",
+      "b618ffe240cce8acd398bdd0c6d22a468a9141fb4437f7413dea9884a2c712da"
+    ],
+    "sourceBodySha256": "a56dfea1d7d213229593a033e5d922cac2a71407bddefd814210e1277c679765",
+    "bodySha256": "3de15d8cc2559f9eb8dedfb627709ef822c59528371a39b517e9988a09794489",
+    "images": [
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/04b2d39b-d13e-4982-afde-3c56f824a221_1196x528.png",
+        "localPath": "/images/articles/04b2d39b-d13e-4982-afde-3c56f824a221_1196x528.png"
+      }
+    ]
+  },
+  {
+    "slug": "git-hooks-pre-push-y-draft-pull-request",
+    "title": "Git Hooks, Pre-Push y Draft Pull Request",
+    "sourceUrl": "https://raulalmeidablog.substack.com/p/git-hooks-pre-push-y-draft-pull-request",
+    "publishedAt": "2025-01-25T08:01:27Z",
+    "language": "es",
+    "topic": "Engineering workflow",
+    "summary": "Una estrategia de comprobaciones locales y draft pull requests para acortar los ciclos de feedback.",
+    "seriesPosition": null,
+    "sourceImageCount": 1,
+    "sourceCodeBlockCount": 6,
+    "codeBlockSha256": [
+      "f42331c313fef5159260c8821d92ae59bea92d1e6b09720d1635a11b1b9db501",
+      "d9098d6157a902043e9934013601d90e752fb7af33ea516dd4eebc6b25d69c88",
+      "17ae408de401b976a260714fce696f4e20f139ec9663a57da987b44316bfe81a",
+      "9f8b62278c52fb9ee54bd6e08afc47c776beea0afda63d22ab6976f0f4695aca",
+      "04f1fbd33a81c6c5c0ab02292b49b9a973a299b3604689895d8b98056a130096",
+      "17ae408de401b976a260714fce696f4e20f139ec9663a57da987b44316bfe81a"
+    ],
+    "sourceBodySha256": "d867fe42c2dc120adb5c75b200966d5547e2e8ac7c2e9fa6156b6cb20d5660d4",
+    "bodySha256": "c51eb05452c7f42847014dee6ca3315a2d8b48d8922316c91acdcd843aa26e86",
+    "images": [
+      {
+        "sourceUrl": "https://substack-post-media.s3.amazonaws.com/public/images/c78489b3-eefd-4cc8-94c3-4cdb841d9052_519x445.png",
+        "localPath": "/images/articles/c78489b3-eefd-4cc8-94c3-4cdb841d9052_519x445.png"
+      }
+    ]
+  }
+]

@@ -22,15 +22,19 @@ test('the built video collection contains all six Shorts in editorial order with
   }
 });
 
-test('the home page features modernisation, demand spikes and AI without changing the existing talks', () => {
+test('the home page curates one short and one talk while the talk archive preserves all recordings', () => {
   const html = readFileSync('dist/index.html', 'utf8');
   assert.ok(html.includes('id="videos"'), 'Home must include the short-video selection');
   const ids = [...html.matchAll(/data-short-id="([^"]+)"/g)].map(match => match[1]);
-  assert.deepEqual(ids, ['GbBUQexIUrs', 'wnF2yn-QjWM', 'QD0J1roHq5o']);
+  assert.deepEqual(ids, ['GbBUQexIUrs']);
   assert.ok(html.includes('href="/videos/"'));
+  assert.ok(html.includes('href="/talks/"'));
   assert.doesNotMatch(html, /<iframe\b/i);
-  assert.equal((html.match(/data-video-embed\s/g) || []).length, 6);
-  assert.ok(html.includes('start=6104'));
-  assert.ok(html.includes('NCcNgffg'));
-  assert.ok(html.includes('YV-pVvkb68U'));
+  assert.equal((html.match(/data-video-embed\s/g) || []).length, 2);
+  const archive = readFileSync('dist/talks/index.html', 'utf8');
+  assert.equal((archive.match(/data-video-embed\s/g) || []).length, 3);
+  assert.ok(archive.includes('start=6104'));
+  assert.ok(archive.includes('NCcNgffg'));
+  assert.ok(archive.includes('YV-pVvkb68U'));
+  assert.ok(html.includes('class="hero-bio"'));
 });

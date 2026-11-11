@@ -21,7 +21,6 @@ const { title, thumbnail, embedUrl, sourceUrl, sourceLabel, playLabel = 'Play he
     <a class="text-link" href={sourceUrl} target="_blank" rel="noopener noreferrer">{sourceLabel} <span aria-hidden="true">↗</span></a>
     <button type="button" class="player-close" data-video-close hidden>Close player</button>
   </div>
-  <p class="player-privacy">The external player loads only when you press play. You can also open the original source.</p>
 </div>
 <script>
 document.querySelectorAll<HTMLElement>('[data-video-embed]').forEach(container => {
@@ -60,6 +59,5 @@ document.querySelectorAll<HTMLElement>('[data-video-embed]').forEach(container =
   .video-stage :global(iframe) { display: block; width: 100%; height: 100%; border: 0; position: absolute; inset: 0; }
   .player-controls { display: flex; justify-content: space-between; gap: 15px; align-items: center; flex-wrap: wrap; margin-top: 5px; }
   .player-close { padding: 10px 4px; min-height: 44px; cursor: pointer; border: 0; background: transparent; font-size: 11px; color: var(--muted); text-decoration: underline; text-underline-offset: 4px; }
-  .player-privacy { font-size: 10px; line-height: 1.6; color: var(--muted); margin: 7px 0 0; }
   @media(prefers-reduced-motion: reduce) { .video-poster img { transition: none; } }
 </style>

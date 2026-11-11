@@ -1,0 +1,15 @@
+raulalmeida.com {
+	root * /srv/raul-personal-site/current
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		-Server
+	}
+	file_server
+}
+
+www.raulalmeida.com {
+	redir https://raulalmeida.com{uri} permanent
+}

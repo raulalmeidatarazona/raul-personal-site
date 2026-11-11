@@ -1,0 +1,20 @@
+---
+import VideoEmbed from './VideoEmbed.astro';
+const { featured = false } = Astro.props;
+---
+  <div class="talks-layout">
+    <article class="recorded-talk">
+      <VideoEmbed title="APIs y Automatización — WordCamp Cartagena 2024" thumbnail="/images/wordcamp-cartagena-talk.jpg" embedUrl="https://video.wordpress.com/embed/NCcNgffg?hd=1&autoPlay=1&permalink=1&loop=0&muted=0&playsinline=1&controls=1&cover=1" sourceUrl="https://wordpress.tv/2024/07/23/apis-y-automatizacion-transformando-tu-wordpress-en-una-maquina-de-negocios/" sourceLabel="Open on WordPress.tv" />
+      <div class="recording-copy"><span class="eyebrow">WORDCAMP CARTAGENA · 8 JUNE 2024 · SPANISH</span><h3 lang="es">APIs y Automatización: Transformando tu WordPress en una Máquina de Negocios</h3><p>Connecting WooCommerce, customer relationships and warehouse operations through APIs. A practical talk about making business systems work together.</p></div>
+    </article>
+    {!featured && <>
+    <article class="recorded-talk festival-talk">
+      <VideoEmbed title="Raúl Almeida — Sustainable Fashion Fest 2026, from 1:41:44" thumbnail="/images/sustainable-fashion-fest.jpg" embedUrl="https://www.youtube-nocookie.com/embed/T6qQIuMQZ1A?start=6104&autoplay=1&playsinline=1&rel=0" sourceUrl="https://www.youtube.com/watch?v=T6qQIuMQZ1A&t=6104s" sourceLabel="Open on YouTube at 1:41:44" playLabel="Play from 1:41:44" />
+      <div class="recording-copy"><span class="eyebrow">SUSTAINABLE FASHION FEST 2026 · BARCELONA</span><h3>Technology meets<br/>sustainable fashion.</h3><p>My contribution to the festival’s day-three conference. Playback starts at my appearance, 1:41:44 into the original broadcast.</p></div>
+    </article>
+    <article class="community-recording">
+      <VideoEmbed title="Desarrollar en WordPress con Raul Almeida" thumbnail="/images/wordpress-cartagena-video.jpg" embedUrl="https://www.youtube-nocookie.com/embed/YV-pVvkb68U?autoplay=1&playsinline=1&rel=0" sourceUrl="https://www.youtube.com/watch?v=YV-pVvkb68U" sourceLabel="Open on YouTube" />
+      <div class="recording-copy"><span class="eyebrow">FROM THE COMMUNITY ARCHIVE · WORDPRESS CARTAGENA</span><h3 lang="es">Desarrollar en WordPress<br/>con Raul Almeida</h3><p>A conversation with the WordPress Cartagena community. Original recording in Spanish, hosted on their YouTube channel.</p></div>
+    </article>
+    </>}
+  </div>

@@ -1,0 +1,22 @@
+<div class="email-contact">
+  <a class="contact-email" href="mailto:raul.almeida@arsoluciondigital.com">raul.almeida@arsoluciondigital.com</a>
+  <button type="button" class="copy-email" data-copy-email aria-describedby="email-copy-status">Copy email</button>
+  <span id="email-copy-status" role="status" aria-live="polite"></span>
+</div>
+<script>
+  import { copyText } from '../lib/copy-text.mjs';
+  const button = document.querySelector<HTMLButtonElement>('[data-copy-email]')!;
+  button.addEventListener('click', async () => {
+    if (button.getAttribute('aria-busy') === 'true') return;
+      button.setAttribute('aria-busy', 'true');
+    await copyText('raul.almeida@arsoluciondigital.com', document.querySelector('#email-copy-status')!, 'Email copied.', 'Could not copy. Select the email address and copy it manually.');
+    button.removeAttribute('aria-busy');
+  });
+</script>
+<style>
+  .email-contact { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 18px; }
+  .email-contact .contact-email { margin: 0; overflow-wrap: anywhere; }
+  .copy-email { min-height: 44px; padding: 8px 14px; border: 1px solid currentColor; border-radius: 4px; background: transparent; color: inherit; cursor: pointer; font-size: 13px; }
+  [role="status"] { flex-basis: 100%; font-size: 13px; }
+  [role="status"]:empty { display: none; }
+</style>

@@ -1,0 +1,50 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { articles, legacySeries, articleDate } from '../../data/articles';
+import '../../styles/articles.css';
+import { prepareArticle } from '../../lib/article-reading.mjs';
+const bodies = import.meta.glob('../../articles/*.html', { query: '?raw', import: 'default', eager: true });
+export function getStaticPaths() {
+  return articles.map(article => ({ params: { slug: article.slug }, props: { article } }));
+}
+const { article } = Astro.props;
+const body = bodies[`../../articles/${article.slug}.html`] as string;
+const reading = prepareArticle(body, article.language);
+const position = article.seriesPosition;
+const previous = position && position > 1 ? legacySeries[position - 2] : undefined;
+const next = position && position < legacySeries.length ? legacySeries[position] : undefined;
+---
+<Layout title={`${article.title} — Raúl Almeida`} description={article.summary} language={article.language} canonical={article.sourceUrl} noindex>
+  <article class="wrap published-article">
+    <a class="text-link" href="/notes/" lang="en">← All articles</a>
+    <header class="article-heading">
+      <span class="eyebrow">{article.topic} · {article.language === 'es' ? 'ESPAÑOL' : 'ENGLISH'}</span>
+      <h1>{article.title}</h1>
+      <div class="article-byline mono"><span>RAÚL ALMEIDA</span><time datetime={article.publishedAt}>{articleDate(article)}</time><span class="reading-time">{article.language === 'es' ? `~${reading.readingMinutes} min de lectura` : `~${reading.readingMinutes} min read`}</span></div>
+      <p class="article-origin" lang="en">Originally published on <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer">Substack ↗</a>. Original language and publication date preserved.</p>
+    </header>
+    {position && <aside class="article-series" lang="en"><span class="eyebrow">LEGACY TO EVENTS / PART {position} OF {legacySeries.length}</span><p>A practical series on outbox, CDC, event contracts and reliable consumers.</p><a class="text-link" href="/notes/#legacy-to-events">See the complete series →</a></aside>}
+    {reading.headings.length > 0 && <details class="article-toc"><summary>{article.language === 'es' ? 'En este artículo' : 'On this page'}</summary><nav aria-label={article.language === 'es' ? 'Índice del artículo' : 'Article contents'}><ol>{reading.headings.map(heading => <li class:list={{subheading: heading.level === 3}}><a href={`#${heading.id}`}>{heading.title}</a></li>)}</ol></nav></details>}
+    <div class="article-body" set:html={reading.html}/>
+    {position && <nav class="article-pagination" aria-label="Series navigation" lang="en">
+      {previous ? <a href={`/p/${previous.slug}/`}><span class="eyebrow">← PREVIOUS / PART {previous.seriesPosition}</span><strong>{previous.title}</strong></a> : <span/>}
+      {next ? <a href={`/p/${next.slug}/`}><span class="eyebrow">NEXT / PART {next.seriesPosition} →</span><strong>{next.title}</strong></a> : <a href="/notes/#legacy-to-events"><span class="eyebrow">SERIES COMPLETE</span><strong>Back to the full reading path →</strong></a>}
+    </nav>}
+    <footer class="article-end" lang="en"><p>This is a reading-preview copy of the published article, not a new technical revision.</p><a class="text-link" href={article.sourceUrl} target="_blank" rel="noopener noreferrer">Read or subscribe on Substack ↗</a></footer>
+  </article>
+</Layout>
+<script>
+  import { copyText } from '../../lib/copy-text.mjs';
+  const spanish = document.documentElement.lang === 'es';
+  document.querySelectorAll<HTMLButtonElement>('[data-copy-code]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const example = button.closest('.code-example')!;
+      const code = example.querySelector('pre')!.textContent || '';
+      const status = example.querySelector<HTMLElement>('[role="status"]')!;
+      if (button.getAttribute('aria-busy') === 'true') return;
+      button.setAttribute('aria-busy', 'true');
+      await copyText(code, status, spanish ? 'Código copiado.' : 'Code copied.', spanish ? 'No se pudo copiar. Selecciona el código y cópialo manualmente.' : 'Could not copy. Select the code and copy it manually.');
+      button.removeAttribute('aria-busy');
+    });
+  });
+</script>

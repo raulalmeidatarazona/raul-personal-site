@@ -1,0 +1,167 @@
+<p>In the previous article, we removed the polling tax.</p><p>Instead of asking the database every 15 seconds:</p><blockquote><p><strong>“Did anything change?”</strong></p></blockquote><p>we changed the architecture so that every relevant mutation could produce an event atomically through a <strong>Transactional Outbox</strong>.</p><p>The legacy ERP remained untouched.</p><p>The database captured the change.</p><p>The Outbox recorded the event.</p><p>But that created the next problem:</p><blockquote><p><strong>How do we move those events out of MySQL without going back to polling?</strong></p></blockquote><p>That is where the MySQL <strong>Binary Log</strong> becomes interesting.</p><p>In this article, we will build a lightweight Go-based streamer that connects to MySQL through the replication protocol, consumes BinLog events continuously, uses <strong>GTID-based positioning</strong> for recovery, and feeds a bounded in-memory pipeline without turning the database into another polling source.</p><p>The implementation described here was designed around a target workload of approximately <strong>3,000 messages per second</strong>, with a measured memory footprint below <strong>100 MB</strong>.</p><div><hr></div><h2>The Problem After the Outbox</h2><p>The previous architecture looked like this:</p><div><figure><a href="/images/articles/29012b91-ef94-4c20-b010-0fa808834d0f_977x278.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/29012b91-ef94-4c20-b010-0fa808834d0f_977x278.png" alt="" loading="lazy" decoding="async" width="977" height="278"></div></a></figure></div><p>We had successfully created a reliable event boundary.</p><p>But the question mark remained.</p><p>How do we consume the Outbox?</p><p>The obvious answer is:</p><div><pre><code class="language-sql">SELECT *
+FROM outbox
+WHERE status = 'pending'
+ORDER BY created_at
+LIMIT 1000;</code></pre></div><p>Then run it again.</p><p>And again.</p><p>And again.</p><p>We would have simply recreated the architecture we had just removed.</p><p>Polling is still polling, even if the table is called <code>outbox</code>.</p><p>We needed a different mechanism.</p><div><hr></div><h2>The Binary Log Changes the Game</h2><p>MySQL already maintains a sequential history of changes through its <strong>Binary Log</strong>.</p><p>Instead of asking the database to repeatedly query the Outbox table, we can consume the database’s replication stream.</p><p>The architecture changes from:</p><div><figure><a href="/images/articles/f87d64d3-cf95-4096-8238-273890a0246a_710x370.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/f87d64d3-cf95-4096-8238-273890a0246a_710x370.png" alt="" loading="lazy" decoding="async" width="710" height="370"></div></a></figure></div><p>to:</p><div><figure><div><div><img src="/images/articles/2c56710e-6db8-42b9-8773-ac78ee8af346_1250x90.png" alt="" loading="lazy" decoding="async" width="1250" height="90"><div></div></div></div></figure></div><p>The database is no longer being interrogated for changes.</p><p>The consumer is following the existing replication stream.</p><p>MySQL’s replication protocol is specifically designed to transmit binary-log events to replicas. A Go implementation can use that same protocol to behave as a lightweight replication client rather than a traditional application polling the database. The <code>go-mysql</code> library explicitly provides a replication package for this use case and supports GTID-based synchronization.</p><div><hr></div><h2>Why GTIDs Matter</h2><p>There are two fundamentally different ways to remember where we were.</p><p>The first is the traditional file-and-position model:</p><pre><code><code>binlog.000123:4567</code></code></pre><p>It works.</p><p>But the position is tied to a particular binary-log file and offset.</p><p>If the source changes during a failover, the physical coordinates may no longer be the most useful identity for resuming the stream.</p><p>GTIDs solve a different problem.</p><p>A GTID identifies a transaction independently of the physical file position.</p><p>MySQL documents GTID-based replication specifically as a way to simplify replication management and failover by avoiding dependence on log-file and position coordinates.</p><p>Conceptually:</p><div><figure><div><div><img src="/images/articles/1877d981-0071-4523-8848-7c9a91b1944e_747x94.png" alt="" loading="lazy" decoding="async" width="747" height="94"><div></div></div></div></figure></div><p>Instead of saying:</p><blockquote><p>“Continue reading from byte 4,567 in <code>binlog.000123</code>.”</p></blockquote><p>we can say:</p><blockquote><p>“Continue from this transaction history.”</p></blockquote><p>That distinction becomes extremely useful when the topology changes.</p><div><hr></div><h2>The Streamer Architecture</h2><p>The resulting architecture looks like this:</p><div><figure><div><div><img src="/images/articles/d2349443-f5da-4825-a613-c92588a2b9f1_1811x264.png" alt="" loading="lazy" decoding="async" width="1456" height="212"><div></div></div></div></figure></div><p>There are four important components:</p><p><strong>BinLog Syncer</strong></p><p>Maintains the connection to MySQL and consumes replication events.</p><p><strong>Event Filter</strong></p><p>Ignores events that are irrelevant to the CDC pipeline and keeps only the changes we care about.</p><p><strong>Bounded Buffer</strong></p><p>Prevents downstream backpressure from causing unbounded memory growth.</p><p><strong>Checkpoint Store</strong></p><p>Persists the position state required to resume processing after a restart.</p><p>The key architectural constraint is:</p><blockquote><p><strong>The streamer must never allow downstream slowness to turn into unbounded memory consumption.</strong></p></blockquote><div><hr></div><h2>Why a Bounded Buffer?</h2><p>A common mistake when building streaming systems is to optimize for throughput first and memory second.</p><p>That usually ends with something like:</p><pre><code><code>events = append(events, event)</code></code></pre><p>forever.</p><p>It works until it doesn’t.</p><p>If the consumer is slower than the producer, the queue grows.</p><p>Eventually:</p><div><figure><div><div><img src="/images/articles/b1d13c83-70b4-46ae-b356-6a5b3730c9fa_1599x348.png" alt="" loading="lazy" decoding="async" width="1456" height="317"><div></div></div></div></figure></div><p>A bounded queue introduces a hard memory limit:</p><div><figure><div><div><img src="/images/articles/ae85ed65-aab8-482c-bc9a-c41b10dc3f9f_667x174.png" alt="" loading="lazy" decoding="async" width="667" height="174"><div></div></div></div></figure></div><p>The queue can become full.</p><p>That is not a bug.</p><p>That is a signal.</p><p>Once the buffer reaches its limit, the system must apply a deliberate backpressure policy rather than silently consuming all available memory.</p><p>For a production system, that policy might mean blocking, batching, dropping only explicitly non-critical data, or transferring pressure downstream.</p><p>For transactional CDC, the correct behavior is generally to preserve the event and control throughput rather than silently lose data.</p><div><hr></div><h2>Connecting to MySQL</h2><p>The Go ecosystem has a useful building block for this problem:</p><p><code>github.com/go-mysql-org/go-mysql/replication</code></p><p>The library exposes a <code>BinlogSyncer</code>, allows you to specify a unique server ID, and supports both file/position and GTID-based synchronization.</p><p>A minimal configuration looks like this:</p><div><pre><code class="language-go">package main
+
+import (
+	"log"
+
+	"github.com/go-mysql-org/go-mysql/replication"
+)
+
+func main() {
+	cfg := replication.BinlogSyncerConfig{
+		ServerID: 1001,
+		Flavor:   "mysql",
+		Host:     "127.0.0.1",
+		Port:     3306,
+		User:     "cdc_user",
+		Password: "cdc_password",
+	}
+
+	syncer := replication.NewBinlogSyncer(cfg)
+
+	log.Println("BinLog syncer initialized:", syncer)
+}</code></pre></div><p>The <code>ServerID</code> is important because the client is participating in the replication protocol as a replication consumer. The <code>go-mysql</code> documentation explicitly requires a unique server ID for the syncer.</p><p>In production, of course, credentials should come from a secret manager or environment rather than being embedded in source code.</p><div><hr></div><h2>The Replication User</h2><p>The replication client also needs an appropriate MySQL account.</p><p>MySQL documents <code>REPLICATION SLAVE</code> as the privilege used by a replication account to request updates from a replication source. Although MySQL has renamed much of its replication terminology from “slave” to “replica”, the privilege name remains <code>REPLICATION SLAVE</code> in current MySQL documentation.</p><p>A dedicated account is preferable to using an administrative account:</p><div><pre><code class="language-sql">CREATE USER 'cdc_user'@'10.%'
+IDENTIFIED BY 'strong-secret';
+
+GRANT REPLICATION SLAVE ON *.*
+TO 'cdc_user'@'10.%';</code></pre></div><p>The important principle is <strong>least privilege</strong>.</p><p>This process does not need to update application tables.</p><p>It needs to consume replication data.</p><div><hr></div><h2>Starting From a GTID Set</h2><p>The crucial part of the implementation is the starting point.</p><p>The <code>go-mysql</code> replication package supports:</p><pre><code><code>StartSyncGTID(...)</code></code></pre><p>which allows the streamer to request binary-log events starting from a GTID set rather than a raw file/position coordinate.</p><p>A simplified implementation looks like this:</p><div><pre><code class="language-go">package main
+
+import (
+	"log"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
+)
+
+func startFromGTID(syncer *replication.BinlogSyncer, gtidString string) {
+	gtidSet, err := mysql.ParseGTIDSet(
+		mysql.MySQLFlavor,
+		gtidString,
+	)
+	if err != nil {
+		log.Fatalf("parse GTID set: %v", err)
+	}
+
+	streamer, err := syncer.StartSyncGTID(gtidSet)
+	if err != nil {
+		log.Fatalf("start GTID sync: %v", err)
+	}
+
+	_ = streamer
+}
+</code></pre></div><p>This is conceptually the important transition:</p><div><figure><div><div><img src="/images/articles/b122dc20-7e46-491b-a8e7-b799d41b57c0_1365x140.png" alt="" loading="lazy" decoding="async" width="1365" height="140"><div></div></div></div></figure></div><p>MySQL’s GTID lifecycle associates GTIDs with committed transactions in the binary log, and the <code>gtid_executed</code> set represents the transactions executed on the server.</p><div><hr></div><h2>Reading the Stream</h2><p>Once the stream is established, the consumer continuously receives events.</p><p>A simplified loop:</p><div><pre><code class="language-go">for {
+	ev, err := streamer.GetEvent(context.Background())
+	if err != nil {
+		log.Printf("stream error: %v", err)
+		continue
+	}
+
+	handleEvent(ev)
+}
+</code></pre></div><p>The important architectural property is that <code>GetEvent</code> is not repeatedly issuing SQL queries against the Outbox.</p><p>The process is consuming the replication stream.</p><p>That means the data path is now:</p><div><figure><div><div><img src="/images/articles/085cc698-4c3b-4dba-bdf3-52e3667b8a9a_998x82.png" alt="" loading="lazy" decoding="async" width="998" height="82"><div></div></div></div></figure></div><p>The difference from polling is fundamental.</p><p>There is no: <code>SELECT …</code> loop.</p><div><hr></div><h2>Filtering the Outbox Events</h2><p>The BinLog contains much more than our Outbox changes.</p><p>The database may be generating events for:</p><ul><li><p>orders,</p></li><li><p>customers,</p></li><li><p>payments,</p></li><li><p>logs,</p></li><li><p>inventory,</p></li><li><p>internal tables,</p></li><li><p>and many other transactions.</p></li></ul><p>The streamer therefore needs a filtering layer.</p><p>Conceptually:</p><div><figure><div><div><img src="/images/articles/6f5ef4bd-e93a-4b89-a6d0-c4dc9b5f12f1_682x187.png" alt="" loading="lazy" decoding="async" width="682" height="187"><div></div></div></div></figure></div><p>The actual implementation should inspect the parsed event type and table metadata rather than pretending every BinLog event is an Outbox record.</p><p>For row-based logging, MySQL writes row-change events to the binary log, which makes row-level CDC a natural fit for this style of event extraction. MySQL 8.0 uses row-based logging by default, and MySQL recommends row-based logging for new replication setups.</p><p>A simplified processing structure might look like:</p><div><pre><code class="language-go">switch event := ev.Event.(type) {
+case *replication.RowsEvent:
+	// Inspect table and row mutations.
+	// Keep only the Outbox changes.
+	_ = event
+}
+</code></pre></div><p>The production implementation then needs to handle the complete set of event types required by the chosen MySQL configuration.</p><div><hr></div><h2>The Checkpoint Problem</h2><p>Streaming data is easy.</p><p>Restarting safely is much harder.</p><p>Imagine the streamer processes:</p><div><figure><a href="/images/articles/f6de8f31-2883-403a-bbaf-d30d37bfb0bc_309x382.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/f6de8f31-2883-403a-bbaf-d30d37bfb0bc_309x382.png" alt="" loading="lazy" decoding="async" width="309" height="382"></div></a></figure></div><p>Then the process crashes.</p><p>Where should it restart?</p><p>If the checkpoint was written before <code>D</code> was successfully processed, we may process <code>D</code> again.</p><p>If the checkpoint was written after the process claimed <code>D</code> was handled but before the downstream operation actually succeeded, we may lose it.</p><p>This is where <strong>checkpoint semantics</strong> become more important than raw throughput.</p><p>The pipeline should look like:</p><div><figure><a href="/images/articles/444bd264-af46-44f8-a9a7-55cced53fe2a_872x349.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/444bd264-af46-44f8-a9a7-55cced53fe2a_872x349.png" alt="" loading="lazy" decoding="async" width="872" height="349"></div></a></figure></div><p></p><p>The ordering matters.</p><p><strong>Process first. Persist the checkpoint after successful processing.</strong></p><p>Otherwise the checkpoint can move ahead of the actual business operation.</p><p>That is how seemingly reliable CDC systems accidentally create data loss.</p><div><hr></div><h2>GTID-Based Recovery</h2><p>With GTIDs, the restart problem becomes easier to reason about.</p><p>The streamer can persist the GTID state representing the transaction history it has successfully consumed and then request the stream from that state after restarting.</p><p>MySQL’s GTID mechanism is explicitly designed to identify transactions independently of physical binary-log coordinates and to support automatic positioning during replication and failover.</p><p>Conceptually:</p><div><figure><a href="/images/articles/710b900c-aad9-4bba-885e-1feda0dae961_230x572.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/710b900c-aad9-4bba-885e-1feda0dae961_230x572.png" alt="" loading="lazy" decoding="async" width="230" height="572"></div></a></figure></div><p>The checkpoint is therefore not simply:</p><pre><code><code>binlog.000123:4567</code></code></pre><p>It represents transactional progress.</p><div><hr></div><h2>Why BoltDB?</h2><p>For a lightweight standalone binary, we wanted checkpoint storage to have very little operational overhead.</p><p>A full external database would have introduced another dependency:</p><div><figure><div><div><img src="/images/articles/7283d955-8979-49e8-94d7-8913430ed8fd_561x185.png" alt="" loading="lazy" decoding="async" width="561" height="185"><div></div></div></div></figure></div><p>That is unnecessary for a small amount of local state.</p><p>A local embedded store such as BoltDB can provide durable checkpoint storage without introducing another network service.</p><p>The important principle is not BoltDB itself.</p><p>It is:</p><blockquote><p><strong>The checkpoint store should be simpler than the system it is checkpointing.</strong></p></blockquote><p>The state is small.</p><p>The operational footprint should therefore remain small.</p><div><hr></div><h2>A More Complete Streamer Skeleton</h2><p>Putting the pieces together:</p><div><pre><code class="language-go">package main
+
+import (
+	"context"
+	"log"
+	"time"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
+)
+
+type BinlogStreamer struct {
+	syncer *replication.BinlogSyncer
+}
+
+func NewStreamer() *BinlogStreamer {
+	cfg := replication.BinlogSyncerConfig{
+		ServerID: 1001,
+		Flavor:   "mysql",
+		Host:     "127.0.0.1",
+		Port:     3306,
+		User:     "cdc_user",
+		Password: "cdc_password",
+	}
+
+	return &amp;BinlogStreamer{
+		syncer: replication.NewBinlogSyncer(cfg),
+	}
+}
+
+func (s *BinlogStreamer) Start(gtidString string) error {
+	gtidSet, err := mysql.ParseGTIDSet(
+		mysql.MySQLFlavor,
+		gtidString,
+	)
+	if err != nil {
+		return err
+	}
+
+	streamer, err := s.syncer.StartSyncGTID(gtidSet)
+	if err != nil {
+		return err
+	}
+
+	for {
+		ctx, cancel := context.WithTimeout(
+			context.Background(),
+			2*time.Second,
+		)
+
+		ev, err := streamer.GetEvent(ctx)
+		cancel()
+
+		if err != nil {
+			continue
+		}
+
+		if !isOutboxEvent(ev) {
+			continue
+		}
+
+		if err := processEvent(ev); err != nil {
+			log.Printf("processing failed: %v", err)
+			continue
+		}
+
+		// Persist the checkpoint only after
+		// successful event processing.
+		persistCheckpoint(ev)
+	}
+}
+
+func isOutboxEvent(
+	ev *replication.BinlogEvent,
+) bool {
+	// Production implementation:
+	// inspect event type, table metadata,
+	// schema and row changes.
+	return true
+}
+
+func processEvent(
+	ev *replication.BinlogEvent,
+) error {
+	// Push to bounded buffer / downstream pipeline.
+	_ = ev
+	return nil
+}
+
+func persistCheckpoint(
+	ev *replication.BinlogEvent,
+) {
+	// Persist GTID / transactional progress.
+	_ = ev
+}</code></pre></div><p>This is intentionally a skeleton.</p><p>A production CDC engine needs considerably more:</p><ul><li><p>reconnect handling,</p></li><li><p>retry policies,</p></li><li><p>bounded queues,</p></li><li><p>graceful shutdown,</p></li><li><p>durable checkpoint semantics,</p></li><li><p>schema-change handling,</p></li><li><p>event batching,</p></li><li><p>metrics,</p></li><li><p>tracing,</p></li><li><p>dead-letter handling,</p></li><li><p>backpressure,</p></li><li><p>and exactly what constitutes successful downstream processing.</p></li></ul><p>The interesting part is the architecture.</p><p>The implementation details grow from there.</p><div><hr></div><h2>The Memory Constraint</h2><p>Now we get to the engineering constraint that drove the implementation.</p><p>The streamer should be small enough to run as a dedicated sidecar or service without requiring a large runtime environment.</p><p>The pipeline therefore has to avoid:</p><div><figure><a href="/images/articles/80d6c1a2-d8c9-44b6-8ad1-c0f5f5b421fc_271x471.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/80d6c1a2-d8c9-44b6-8ad1-c0f5f5b421fc_271x471.png" alt="" loading="lazy" decoding="async" width="271" height="471"></div></a></figure></div><p>Instead:</p><div><figure><a href="/images/articles/d9181897-0229-4296-9833-84258b4904b4_173x471.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/d9181897-0229-4296-9833-84258b4904b4_173x471.png" alt="" loading="lazy" decoding="async" width="173" height="471"></div></a></figure></div><p>The buffer defines the maximum amount of work waiting in memory.</p><p>The worker pool defines the maximum concurrency.</p><p>The checkpoint defines durable progress.</p><p>Those three controls prevent the stream from becoming an uncontrolled memory accumulator.</p><div><hr></div><h2>What We Measured</h2><p>In the implementation described in this series, the target was approximately:</p><pre><code><code>Peak throughput:        ~3,000 messages/sec
+Processed volume:      ~350,000 records
+Memory usage:           &lt;100 MB
+Target CPU:             ~50 mCPU</code></code></pre><p>These numbers describe the benchmark environment and implementation, not a universal performance guarantee for Go, MySQL, or <code>go-mysql</code>.</p><p>The important result was that the streamer could maintain the required throughput while keeping its operational footprint small enough to run alongside the existing infrastructure.</p><p>That was the real objective.</p><p>Not winning a benchmark.</p><p><strong>Building a CDC component that could be operated cheaply.</strong></p><div><hr></div><h2>The Resulting Architecture</h2><p>At this point, the complete pipeline looks like this:</p><div><figure><a href="/images/articles/89db4f15-0c45-442c-afb5-cc1f5474b5b6_1904x479.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/89db4f15-0c45-442c-afb5-cc1f5474b5b6_1904x479.png" alt="" loading="lazy" decoding="async" width="1456" height="366"></div></a></figure></div><p>The architectural evolution is now complete:</p><div><figure><a href="/images/articles/1cd0a676-d096-47ad-bcc0-6c891d756ce6_209x673.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/1cd0a676-d096-47ad-bcc0-6c891d756ce6_209x673.png" alt="" loading="lazy" decoding="async" width="209" height="673"></div></a></figure></div><p>And none of it required rewriting the ERP.</p><div><hr></div><h2>The Important Trade-Off</h2><p>There is no free abstraction.</p><p>Moving from polling to BinLog CDC introduces new complexity.</p><p>You now have to understand:</p><ul><li><p>replication privileges,</p></li><li><p>binary-log configuration,</p></li><li><p>GTIDs,</p></li><li><p>event parsing,</p></li><li><p>checkpointing,</p></li><li><p>failover,</p></li><li><p>backpressure,</p></li><li><p>duplicate delivery,</p></li><li><p>schema evolution,</p></li><li><p>and operational monitoring.</p></li></ul><p>That complexity is real.</p><p>But it is controlled complexity.</p><p>Instead of forcing every downstream service to repeatedly query a legacy transactional database, we create a single integration boundary that understands the database’s change stream.</p><p>That is a much more scalable architectural boundary.</p><div><hr></div><h2>Polling vs. CDC</h2><p>The transformation can now be summarized in one diagram:</p><div><figure><a href="/images/articles/9a4c6be2-c17a-4faa-8365-fd881bd6c481_349x1074.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/9a4c6be2-c17a-4faa-8365-fd881bd6c481_349x1074.png" alt="" loading="lazy" decoding="async" width="349" height="1074"></div></a></figure></div><p>The difference is not simply performance.</p><p>It is architectural responsibility.</p><p>In the polling model, the consumer repeatedly interrogates the database.</p><p>In the CDC model, the database’s existing change stream becomes the source of integration events.</p><div><hr></div><h2>The Golden Rule</h2><p>The lesson from both articles can now be summarized in one sentence:</p><blockquote><p><strong>Do not make the transactional database repeatedly prove that a change happened. Capture the change once, then stream the fact asynchronously.</strong></p></blockquote><p>In the first article, we captured the mutation atomically using the <strong>Transactional Outbox</strong>.</p><p>In this article, we moved the event out of MySQL using the <strong>BinLog replication stream and GTID-based positioning</strong>.</p><p>The result is:</p><div><figure><a href="/images/articles/5758821c-45be-486f-ae72-d1e4475d7622_209x774.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/5758821c-45be-486f-ae72-d1e4475d7622_209x774.png" alt="" loading="lazy" decoding="async" width="209" height="774"></div></a></figure></div><p>The critical transaction remains local.</p><p>The network remains asynchronous.</p><p>The legacy ERP remains untouched.</p><p>And the event pipeline can evolve independently from the system that originally produced the data.</p><div><hr></div><h2>What Comes Next?</h2><p>We have now solved two different problems.</p><p><strong>Post 1:</strong> How do we detect changes without polling?</p><p>→ Transactional Outbox + MySQL Trigger</p><p><strong>Post 2:</strong> How do we move those changes without polling again?</p><p>→ MySQL BinLog + GTID + Go Streamer</p><p>But there is still one major problem.</p><p>We have a stream.</p><p>We have events.</p><p>We have a buffer.</p><p>Sooner or later, we need to answer a much harder question:</p><blockquote><p><strong>What happens when the consumer is down, the broker is unavailable, the network fails, or the same event is delivered twice?</strong></p></blockquote><p>That is where <strong>idempotency, retries, ordering, backpressure, and failure recovery</strong> become the real architecture.</p><p>And that is the subject of the next post.</p><p>Because a streaming system is not production-ready when it can process 3,000 messages per second.</p><p>It is production-ready when it can <strong>survive failure without losing the truth.</strong></p>

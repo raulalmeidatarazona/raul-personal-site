@@ -1,0 +1,11 @@
+.hero-bio{font-size:13px;color:var(--muted);max-width:450px;margin-top:25px}
+.hero-bio a{text-decoration:underline;text-underline-offset:4px;white-space:nowrap}
+.featured-short .short-card{display:grid;grid-template-columns:minmax(200px,300px) 1fr;column-gap:48px;max-width:900px;margin-inline:auto}
+.featured-short .short-meta{grid-column:1/-1}
+.featured-short .video-embed{grid-column:1}
+.featured-short .short-copy{grid-column:2;align-self:center}
+.featured-short .short-copy h3{font:36px/1.2 var(--serif)}
+@media(max-width:760px){.featured-short .short-card{display:block;max-width:360px}.featured-short .short-copy h3{font-size:29px}}
+
+.media-privacy{font-size:12px;color:var(--muted);margin-bottom:20px;max-width:650px}
+.project-copy .project-decision,.project-copy .project-limit{font-size:13px;margin-top:14px}

@@ -1,20 +1,44 @@
 ---
 import '../styles/site.css';
 import '../styles/photos-talks.css';
-const { title = 'Raúl Almeida — Backend engineering & architecture', description = 'Practical backend engineering, reliable systems and the decisions behind them. Raúl Almeida, based in Malta.' } = Astro.props;
+import '../styles/ux.css';
+const { title = 'Raúl Almeida — Backend engineering & architecture', description = 'Practical backend engineering, reliable systems and the decisions behind them. Raúl Almeida, based in Malta.', language = 'en', canonical, noindex = false } = Astro.props;
 ---
 <!doctype html>
-<html lang="en">
-<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="description" content={description}/><meta name="theme-color" content="#f9f8f6"/><title>{title}</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"/></head>
+<html lang={language}>
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="description" content={description}/><meta name="theme-color" content="#f9f8f6"/>{canonical && <link rel="canonical" href={canonical}/>} {noindex && <meta name="robots" content="noindex,follow"/>}<title>{title}</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"/></head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="header wrap"><a class="brand" href="/" aria-label="Raúl Almeida home"><span class="monogram">ra.</span><span>Raúl Almeida<span class="brand-sub">ENGINEERING & ARCHITECTURE</span></span></a><nav aria-label="Main navigation"><a href="/#work">Work</a><a href="/#notes">Notes</a><a href="/#videos">Videos</a><a href="/#talks">Talks</a><a href="/#about">About</a><a class="nav-contact" href="mailto:raul.almeida@arsoluciondigital.com">Let’s talk <span aria-hidden="true">↗</span></a></nav></header>
+<div class="site-header"><header class="header wrap"><a class="brand" href="/" aria-label="Raúl Almeida home"><span class="monogram">ra.</span><span>Raúl Almeida<span class="brand-sub">ENGINEERING & ARCHITECTURE</span></span></a><details class="site-menu" open><summary>Menu</summary><nav aria-label="Main navigation"><a href="/#work">Work</a><a href="/#notes">Notes</a><a href="/#videos">Videos</a><a href="/#talks">Talks</a><a href="/#about">About</a><a class="nav-contact" href="/#contact">Let’s talk <span aria-hidden="true">→</span></a></nav></details></header></div>
 <main id="main"><slot/></main>
 <footer class="wrap footer"><a class="brand" href="/">ra.</a><p>Built with care. Kept deliberately simple.</p><a href="https://github.com/raulalmeidatarazona" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a href="https://www.linkedin.com/in/almeidaraul/" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a><span class="mono">MALTA · EUROPE</span></footer>
 </body></html>
+<script>
+  const menu = document.querySelector<HTMLDetailsElement>('.site-menu')!;
+  const mobile = matchMedia('(max-width: 760px)');
+  const syncMenu = () => { menu.open = !mobile.matches; };
+  syncMenu();
+  mobile.addEventListener('change', syncMenu);
+  menu.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && mobile.matches && menu.open) {
+      menu.open = false;
+      menu.querySelector('summary')?.focus();
+    }
+  });
+  menu.querySelectorAll('a').forEach(link => link.addEventListener('click', () => {
+    if (mobile.matches) menu.open = false;
+  }));
+</script>
 <style>
-  @media (max-width: 360px) {
-    .header { flex-wrap: wrap; gap: 8px; }
-    .header nav { width: 100%; justify-content: space-between; }
+  :global(html) { scroll-padding-top: 120px; }
+  .site-header { position: sticky; top: 0; z-index: 30; background: var(--paper); }
+  .site-menu > summary { display: none; }
+  @media (max-width: 760px) {
+    .header { position: relative; gap: 12px; }
+    .site-menu > summary { display: flex; align-items: center; justify-content: center; min-width: 64px; min-height: 44px; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; font-size: 13px; }
+    .site-menu > summary::-webkit-details-marker { display: none; }
+    .header .site-menu nav { position: absolute; top: 100%; left: 0; width: 100%; padding: 12px 20px; background: var(--paper); border: 1px solid var(--line); display: grid; gap: 0; box-shadow: 0 12px 20px #1e1e1c10; }
+    .header .site-menu nav a { display: flex; align-items: center; min-height: 44px; padding: 10px 8px; font-size: 14px; }
+    .header .site-menu .nav-contact { border: 0; border-top: 1px solid var(--line); border-radius: 0; }
   }
 </style>

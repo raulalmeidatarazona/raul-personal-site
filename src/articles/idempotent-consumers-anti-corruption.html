@@ -1,0 +1,163 @@
+<p>In the <a href="/p/the-polling-tax-how-to-decouple-legacy/">first article</a>, we removed the polling tax.</p><p>Instead of repeatedly asking the database:</p><blockquote><p><strong>“Did anything change?”</strong></p></blockquote><p>we captured relevant mutations atomically using a <strong>Transactional Outbox</strong>.</p><p>In the <a href="/p/building-the-go-streamer-reading/">second article</a>, we solved the next problem:</p><blockquote><p><strong>“How do we move those events out of MySQL without polling again?”</strong></p></blockquote><p>We followed the MySQL <strong>Binary Log</strong>, used GTID-based positioning, and built a lightweight Go CDC streamer.</p><p>Then, in the <a href="/p/from-binlog-to-cloudevents-building/">third article</a>, we introduced another architectural boundary:</p><blockquote><p><strong>“How do we turn low-level database changes into stable events and distribute them without tightly coupling producers and consumers?”</strong></p></blockquote><p>We transformed database changes into <strong>CloudEvents v1.0</strong> and introduced a durable messaging layer such as RabbitMQ or NATS JetStream.</p><p>At this point, the architecture looked mature.</p><p>But distributed systems have a habit of asking one final question:</p><blockquote><p><strong>“What happens when the same event arrives twice?”</strong></p></blockquote><p>That question changes everything.</p><p>Because <strong>At-Least-Once delivery means duplicates are not an exceptional condition. They are part of the design.</strong></p><p>This article completes the architecture by introducing two final tactical patterns:</p><p><strong>Idempotent Consumers</strong></p><p>and</p><p><strong>Anti-Corruption Layers (ACLs)</strong></p><p>We will also take the last step: moving read-heavy workloads, including AI agents and public APIs, away from the legacy transactional ERP and onto optimized read models.</p><p>The result is a system where:</p><ul><li><p>the ERP remains the source of transactional truth,</p></li><li><p>downstream consumers become resilient to duplicate delivery,</p></li><li><p>legacy terminology is isolated behind explicit boundaries,</p></li><li><p>and AI agents can query optimized projections without touching the production ERP.</p></li></ul><div><hr></div><h2>The Friday 6 PM Incident</h2><p>It happened on a Friday at 6:00 PM.</p><p>A customer was charged twice.</p><p>At the same time, stock for one of the best-selling products went negative.</p><p>The investigation eventually pointed to a classic distributed-systems failure.</p><p>The consumer had successfully processed the event.</p><p>Then the process crashed.</p><p>It died <strong>before acknowledging the message</strong>.</p><p>When the consumer came back online, the broker redelivered the message.</p><p>That behavior was not a broker bug.</p><p>It was the expected consequence of At-Least-Once delivery.</p><p>RabbitMQ explicitly documents that messages can be redelivered after failures and recommends that consumers be designed to handle messages they have already seen. Publisher retransmissions can also create duplicates when a confirmation is lost during a network failure.</p><p>The actual sequence was:</p><div><figure><a href="/images/articles/83397725-c8f2-4cab-94c6-4fd6b9282c62_833x582.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/83397725-c8f2-4cab-94c6-4fd6b9282c62_833x582.png" alt="" loading="lazy" decoding="async" width="833" height="582"></div></a></figure></div><p>The failure was not that the broker delivered the message twice.</p><p>The failure was that the consumer assumed:</p><blockquote><p><strong>“I will only ever see this event once.”</strong></p></blockquote><p>That assumption does not survive distributed systems.</p><div><hr></div><h2>At-Least-Once Changes the Design</h2><p>At-Least-Once delivery gives us a very specific contract:</p><pre><code><code>The message should not be silently lost,
+but it may be delivered more than once.</code></code></pre><div><figure><div><div><img src="/images/articles/b3f44cb4-bc24-45ee-8feb-db5574dd721c_673x168.png" alt="" loading="lazy" decoding="async" width="673" height="168"><div></div></div></div></figure></div><p>That means the consumer has to be designed around the possibility of:</p><div><figure><a href="/images/articles/fca41782-3e2a-4afa-a5d7-618b22074a6c_503x290.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/fca41782-3e2a-4afa-a5d7-618b22074a6c_503x290.png" alt="" loading="lazy" decoding="async" width="503" height="290"></div></a></figure></div><p>The goal is therefore not to make the transport magically exactly-once.</p><p>The goal is to make the <strong>business effect happen once</strong>.</p><p>That is a very different problem.</p><p>Conceptually:</p><div><figure><div><div><img src="/images/articles/c89dc1b8-41fc-4c3d-8807-1b5eef903c2c_926x67.png" alt="" loading="lazy" decoding="async" width="926" height="67"><div></div></div></div></figure></div><div><hr></div><h2>The Wrong Way to Deduplicate</h2><p>The first implementation many teams write looks like this:</p><div><pre><code class="language-sql">SELECT EXISTS(
+    SELECT 1
+    FROM processed_events
+    WHERE event_id = ?
+);</code></pre></div><p>If the event does not exist:</p><pre><code><code>process event
+insert event_id</code></code></pre><div><figure><a href="/images/articles/33c5aa23-ab35-49e9-93c2-0fc1bf453c93_168x373.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/33c5aa23-ab35-49e9-93c2-0fc1bf453c93_168x373.png" alt="" loading="lazy" decoding="async" width="168" height="373"></div></a></figure></div><p>It looks reasonable.</p><p>But there is a race.</p><p>Two consumer instances can receive the same event at nearly the same time:</p><div><figure><a href="/images/articles/38a427c8-ac20-4217-8374-7ab0f3471036_881x578.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/38a427c8-ac20-4217-8374-7ab0f3471036_881x578.png" alt="" loading="lazy" decoding="async" width="881" height="578"></div></a></figure></div><p>The problem is the gap between:</p><pre><code><code>check</code></code></pre><p>and:</p><pre><code><code>write</code></code></pre><p>That gap is enough for two workers to make the same decision.</p><div><hr></div><h2>Idempotency Must Be Atomic</h2><p>The better pattern is:</p><blockquote><p><strong>Make deduplication part of the same transaction that applies the business effect.</strong></p></blockquote><p>The database should decide whether this event is new.</p><p>If the event is new:</p><ol><li><p>register the event,</p></li><li><p>apply the business mutation,</p></li><li><p>commit both together.</p></li></ol><p>If the event already exists:</p><ol><li><p>do nothing,</p></li><li><p>acknowledge the message.</p></li></ol><p>The desired flow becomes:</p><div><figure><a href="/images/articles/5734484b-832e-425e-9552-952677d2c4ef_451x808.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/5734484b-832e-425e-9552-952677d2c4ef_451x808.png" alt="" loading="lazy" decoding="async" width="451" height="808"></div></a></figure></div><p>The key is the unique constraint.</p><p>For example:</p><div><pre><code class="language-sql">CREATE TABLE processed_events (
+    event_id VARCHAR(255) PRIMARY KEY,
+    processed_at TIMESTAMP(6) NOT NULL
+);</code></pre></div><p>The primary key itself becomes the concurrency control mechanism.</p><div><hr></div><h2>Why the CloudEvent ID Matters</h2><p>In the previous article, we introduced CloudEvents.</p><p>One field now becomes especially important:</p><div><pre><code class="language-json">{
+  "specversion": "1.0",
+  "type": "com.example.erp.order.created",
+  "source": "/erp/orders",
+  "id": "6a9d0e8d-9f1a-4b0d-b4e1-df75d0c8f7bd",
+  "data": {
+    "order_id": "ORD-92831"
+  }
+}</code></pre></div><p>CloudEvents requires producers to ensure that the combination of <code>source</code> and <code>id</code> is unique for each distinct event. Consumers may use identical <code>source</code> and <code>id</code> values to identify duplicates.</p><p>That gives the consumer a stable identity to work with.</p><p>The event can be retried.</p><p>Redelivered.</p><p>Replayed.</p><p>Moved through another transport.</p><p>And the consumer can still answer:</p><blockquote><p><strong>“Have I already processed this event?”</strong></p></blockquote><div><hr></div><h2>The Correct Go Consumer</h2><p>The consumer should not perform:</p><div><figure><a href="/images/articles/8b0b6f8f-7337-4902-96e5-76917c77127e_138x278.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/8b0b6f8f-7337-4902-96e5-76917c77127e_138x278.png" alt="" loading="lazy" decoding="async" width="138" height="278"></div></a></figure></div><p>as three independent operations.</p><p>Instead, we want one transaction.</p><p>A simplified version:</p><div><pre><code class="language-go">package consumer
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+)
+
+type OrderConsumer struct {
+	db            *sql.DB
+	domainService OrderDomainService
+}
+
+type CloudEvent struct {
+	SpecVersion string          `json:"specversion"`
+	ID          string          `json:"id"`
+	Source      string          `json:"source"`
+	Type        string          `json:"type"`
+	Data        json.RawMessage `json:"data"`
+}
+
+func (c *OrderConsumer) ProcessEvent(
+	ctx context.Context,
+	eventBytes []byte,
+) error {
+
+	var event CloudEvent
+
+	if err := json.Unmarshal(eventBytes, &amp;event); err != nil {
+		return fmt.Errorf("decode CloudEvent: %w", err)
+	}
+
+	if event.ID == "" || event.Source == "" {
+		return errors.New("CloudEvent source and id are required")
+	}
+
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback()
+
+	// Register this event atomically.
+	// A UNIQUE constraint on (source, event_id)
+	// turns duplicate delivery into a safe no-op.
+	result, err := tx.ExecContext(ctx, `
+		INSERT INTO processed_events (
+			source,
+			event_id,
+			processed_at
+		)
+		VALUES (?, ?, CURRENT_TIMESTAMP(6))
+		ON DUPLICATE KEY UPDATE event_id = event_id
+	`,
+		event.Source,
+		event.ID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("register event: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	// The event already existed.
+	if rows == 0 {
+		return nil
+	}
+
+	// Anti-Corruption Layer:
+	// translate the external event into the
+	// consumer's internal domain model.
+	order, err := c.translateToDomain(event.Data)
+	if err != nil {
+		return fmt.Errorf("ACL translation failed: %w", err)
+	}
+
+	// IMPORTANT:
+	// the domain operation must participate in the same
+	// database transaction for the atomicity guarantee.
+	if err := c.domainService.ApplyTx(ctx, tx, order); err != nil {
+		return fmt.Errorf("apply domain event: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return nil
+}</code></pre></div><p>The important detail is not the exact SQL syntax.</p><p>The important property is:</p><div><figure><a href="/images/articles/dfd3d3be-146e-4430-abf5-058ca4baae97_445x278.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/dfd3d3be-146e-4430-abf5-058ca4baae97_445x278.png" alt="" loading="lazy" decoding="async" width="445" height="278"></div></a></figure></div><p>If the business operation fails, the processed-event record must not remain committed.</p><p>Otherwise a retry would be incorrectly discarded.</p><div><hr></div><h2>The Anti-Corruption Layer</h2><p>Idempotency solves one problem.</p><p>But there is another architectural problem.</p><p>Legacy systems contain legacy language.</p><p>Imagine the ERP calls an order:</p><pre><code><code>fktscxx001</code></code></pre><p>and uses fields such as:</p><pre><code><code>cod_art
+alm_id
+sit_tran
+fec_ped
+imp_tot</code></code></pre><p>Those names may make perfect sense to the original team.</p><p>They should not leak into the new domain.</p><p>This is where the <strong>Anti-Corruption Layer (ACL)</strong> becomes useful.</p><p>The ACL translates between two models:</p><div><figure><div><div><img src="/images/articles/991f1815-3f17-473b-af6d-0d5da42e4cfe_924x70.png" alt="" loading="lazy" decoding="async" width="924" height="70"><div></div></div></div></figure></div><p>The new service should speak its own language.</p><p>For example:</p><div><figure><a href="/images/articles/b671a8ec-9757-4b0f-a54e-fa1e8f98832f_228x470.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/b671a8ec-9757-4b0f-a54e-fa1e8f98832f_228x470.png" alt="" loading="lazy" decoding="async" width="228" height="470"></div></a></figure></div><p>The legacy model stays outside the domain boundary.</p><div><hr></div><h2>Why an ACL Is More Than a Mapper</h2><p>It is tempting to think:</p><blockquote><p>“The ACL is just a DTO converter.”</p></blockquote><p>It can be much more important than that.</p><p>The ACL can isolate:</p><ul><li><p>legacy field names,</p></li><li><p>legacy status codes,</p></li><li><p>inconsistent identifiers,</p></li><li><p>undocumented business rules,</p></li><li><p>unit conversions,</p></li><li><p>null semantics,</p></li><li><p>historical quirks,</p></li><li><p>and incompatible assumptions.</p></li></ul><p>For example:</p><div><pre><code class="language-go">type LegacyOrder struct {
+	CodArt   string `json:"cod_art"`
+	AlmID    string `json:"alm_id"`
+	SitTran  string `json:"sit_tran"`
+	ImpTotal int64  `json:"imp_tot"`
+}</code></pre></div><p>The domain should never have to know about <code>SitTran</code>.</p><p>Instead:</p><div><pre><code class="language-go">type Order struct {
+	ID             string
+	ProductID      string
+	WarehouseID    string
+	Status         OrderStatus
+	TotalCents     int64
+}</code></pre></div><p>And the ACL performs the translation:</p><div><pre><code class="language-go">func (c *OrderConsumer) translateToDomain(
+	data []byte,
+) (Order, error) {
+
+	var legacy LegacyOrder
+
+	if err := json.Unmarshal(data, &amp;legacy); err != nil {
+		return Order{}, err
+	}
+
+	status, err := mapLegacyStatus(legacy.SitTran)
+	if err != nil {
+		return Order{}, err
+	}
+
+	return Order{
+		ID:         legacy.CodArt,
+		ProductID:  legacy.CodArt,
+		WarehouseID: legacy.AlmID,
+		Status:     status,
+		TotalCents: legacy.ImpTotal,
+	}, nil
+}
+</code></pre></div><p>The point is not the example mapping.</p><p>The point is that <strong>legacy corruption stops at the boundary</strong>.</p><div><hr></div><h2>The Full Consumer Boundary</h2><p>The complete consumer now looks like:</p><div><figure><div><div><img src="/images/articles/f26fa490-facd-481f-913b-2833584c6afc_1256x222.png" alt="" loading="lazy" decoding="async" width="1256" height="222"><div></div></div></div></figure></div><p>The consumer has become an anti-corruption boundary.</p><p>It receives external events.</p><p>It translates them.</p><p>It protects itself against duplicate delivery.</p><p>It applies domain logic.</p><p>And then it maintains its own local read model.</p><div><hr></div><h2>CQRS Enters the Picture</h2><p>Now we reach the final architectural step.</p><p>The AI agent does not need to execute:</p><div><pre><code class="language-sql">SELECT *
+FROM fktscxx001
+WHERE art_id = ?</code></pre></div><p>against the ERP.</p><p>The agent usually needs a very different shape of data.</p><p>For example:</p><div><pre><code class="language-json">{
+  "product_id": "12345",
+  "warehouse": "MAD-01",
+  "available_stock": 42,
+  "last_updated": "2026-09-10T15:45:00Z"
+}</code></pre></div><p>The application can maintain this projection continuously from events.</p><p>Conceptually:</p><div><figure><a href="/images/articles/0faae845-995f-47cd-912f-56e4e2023c10_690x254.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/0faae845-995f-47cd-912f-56e4e2023c10_690x254.png" alt="" loading="lazy" decoding="async" width="690" height="254"></div></a></figure></div><p>This is where CQRS becomes useful.</p><p>The write model can remain optimized for transactional correctness.</p><p>The read model can be optimized for:</p><ul><li><p>search,</p></li><li><p>APIs,</p></li><li><p>dashboards,</p></li><li><p>analytics,</p></li><li><p>AI retrieval,</p></li><li><p>reporting,</p></li><li><p>and high-volume queries.</p></li></ul><p>The two no longer need to have the same shape.</p><div><hr></div><h2>AI Agents Should Not Query the ERP</h2><p>This becomes especially important with AI.</p><p>An AI agent can generate unpredictable query patterns.</p><p>It may ask:</p><pre><code><code>Show me all products with low inventory
+in warehouses near Madrid
+that had unusually high sales
+during the last seven days.</code></code></pre><p>You do not want that query hitting the same transactional database that processes checkout.</p><p>Instead:</p><div><figure><a href="/images/articles/2566bad2-9d34-45b9-8718-29b29641cddf_958x278.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/2566bad2-9d34-45b9-8718-29b29641cddf_958x278.png" alt="" loading="lazy" decoding="async" width="958" height="278"></div></a></figure></div><p>The AI workload is now separated from transactional traffic.</p><p>The ERP remains responsible for truth.</p><p>The read model is responsible for serving queries.</p><div><hr></div><h2>From Synchronous Reads to Replicated State</h2><p>The key transformation is:</p><div><figure><div><div><img src="/images/articles/84d5450e-d377-4389-838c-9d925484b0ef_499x87.png" alt="" loading="lazy" decoding="async" width="499" height="87"><div></div></div></div></figure></div><p>versus:</p><div><figure><div><div><img src="/images/articles/d802bc2c-46d0-4296-9bf8-fc723495d193_1138x70.png" alt="" loading="lazy" decoding="async" width="1138" height="70"><div></div></div></div></figure></div><p>Or visually:</p><div><figure><a href="/images/articles/da4226b8-e276-4715-bb84-dffc9429d5eb_900x554.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/da4226b8-e276-4715-bb84-dffc9429d5eb_900x554.png" alt="" loading="lazy" decoding="async" width="900" height="554"></div></a></figure></div><p>Now the AI agent is no longer a dependency of the transactional system.</p><p>It is a consumer of replicated state.</p><p>That is a much healthier architecture.</p><div><hr></div><h2>Latency Becomes a Different Problem</h2><p>Once the read model exists locally, the application no longer needs to wait for the ERP network round trip for every query.</p><p>For the workloads measured in this implementation, the result was:</p><pre><code><code>Legacy path P50:        1,247 ms
+Read-model P50:            32 ms</code></code></pre><p>That represents a measured <strong>97.4% reduction in P50 latency</strong> for the specific workload and deployment described here.</p><p>The point is not that every CQRS architecture will achieve these exact numbers.</p><p>The point is that removing the remote transactional database from the read path can radically change the latency profile.</p><div><hr></div><h2>Throughput Changes Too</h2><p>The same architecture also changes where the system spends its resources.</p><p>Instead of:</p><div><figure><div><div><img src="/images/articles/fd0dabed-49e9-4a85-b45f-520c94455ea5_753x126.png" alt="" loading="lazy" decoding="async" width="753" height="126"><div></div></div></div></figure></div><p>we can have:</p><div><figure><div><div><img src="/images/articles/3d43d048-108b-4046-9044-2cf062e82692_457x235.png" alt="" loading="lazy" decoding="async" width="457" height="235"><div></div></div></div></figure></div><p>The workloads are now physically separated.</p><p>This implementation measured:</p><pre><code><code>Legacy path:        180 req/s
+Read path:        2,400 req/s</code></code></pre><p>an observed <strong>13.3× increase in throughput</strong> for that specific read workload.</p><p>Again, these are implementation measurements rather than universal characteristics of CQRS or read replicas.</p><div><hr></div><h2>The Cost of Isolation</h2><p>There is no free architecture.</p><p>We have now introduced:</p><ul><li><p>CDC infrastructure,</p></li><li><p>event contracts,</p></li><li><p>message brokers,</p></li><li><p>idempotent consumers,</p></li><li><p>read models,</p></li><li><p>replication,</p></li><li><p>and additional operational monitoring.</p></li></ul><p>That is more software.</p><p>But we also changed the failure boundaries.</p><p>The old architecture looked like:</p><div><figure><a href="/images/articles/81d7451e-6256-448e-9faa-580b5f2e2dbd_275x404.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/81d7451e-6256-448e-9faa-580b5f2e2dbd_275x404.png" alt="" loading="lazy" decoding="async" width="275" height="404"></div></a></figure></div><p>The new architecture looks like:</p><div><figure><div><div><img src="/images/articles/3f75b400-e469-4fc0-8a91-d1312aab05c7_1030x94.png" alt="" loading="lazy" decoding="async" width="1030" height="94"><div></div></div></div></figure></div><p>A failure in an AI query does not need to become a failure in checkout.</p><p>A slow analytics workload does not need to compete with inventory writes.</p><p>A temporarily unavailable consumer can recover from the event stream.</p><p>That is the real architectural value.</p><div><hr></div><h2>The Final Failure Model</h2><p>At this point, we can describe the system in terms of failure boundaries:</p><div><figure><div><div><img src="/images/articles/0bda58ca-fd72-4af1-a90d-a6faaa4af1b7_1706x94.png" alt="" loading="lazy" decoding="async" width="1456" height="80"><div></div></div></div></figure></div><p>Each boundary has a different responsibility.</p><h3>Transactional boundary</h3><p><strong>MySQL + Outbox</strong></p><p>Guarantees that the state mutation and event creation happen together.</p><h3>Transport boundary</h3><p><strong>BinLog + Go Streamer</strong></p><p>Moves changes without polling.</p><h3>Contract boundary</h3><p><strong>CloudEvents</strong></p><p>Provides a common event envelope and stable metadata.</p><h3>Temporal boundary</h3><p><strong>RabbitMQ / NATS JetStream</strong></p><p>Separates producer availability from consumer availability.</p><h3>Domain boundary</h3><p><strong>ACL</strong></p><p>Protects the new application from legacy concepts.</p><h3>Delivery boundary</h3><p><strong>Idempotent Consumer</strong></p><p>Makes duplicate delivery safe.</p><h3>Read boundary</h3><p><strong>CQRS / Read Model</strong></p><p>Separates query workloads from transactional workloads.</p><p>That is the complete architecture.</p><div><hr></div><h2>The Golden Rule</h2><p>After four articles, the entire design can be reduced to one principle:</p><blockquote><p><strong>Assume events will be delivered more than once, isolate legacy models behind explicit boundaries, and build read paths that do not depend on your transactional core.</strong></p></blockquote><p>The final architecture becomes:</p><div><figure><a href="/images/articles/a5d857a3-6888-4f04-a531-b46f357aac9e_1704x588.png" target="_blank" rel="noopener noreferrer"><div><img src="/images/articles/a5d857a3-6888-4f04-a531-b46f357aac9e_1704x588.png" alt="" loading="lazy" decoding="async" width="1456" height="502"></div></a></figure></div><p>The legacy ERP remains the transactional source of truth.</p><p>The event platform becomes the integration boundary.</p><p>The consumers own their own domain interpretation.</p><p>And AI agents operate against replicated read state instead of reaching into the operational database.</p><div><hr></div><h2>What We Learned</h2><p>The four-part journey started with a simple problem:</p><blockquote><p><strong>A cron job was polling a legacy database every 15 seconds.</strong></p></blockquote><p>The final architecture ended somewhere very different:</p><div><figure><div><div><img src="/images/articles/3f81c4d8-4859-424d-8f3d-112489c03bb7_1904x88.png" alt="" loading="lazy" decoding="async" width="1456" height="67"><div></div></div></div></figure></div><p>We did not rewrite the ERP.</p><p>We changed the boundaries around it.</p><p>That is often the more realistic way to modernize a critical legacy platform.</p><p>Not by replacing everything.</p><p>By <strong>isolating what should remain stable, extracting what needs to evolve, and making failure an explicit part of the design.</strong></p><div><hr></div><h2>Final Takeaway</h2><p>The hardest part of distributed systems is rarely the first successful message.</p><p>It is the message that arrives:</p><p><strong>twice.</strong></p><p>At the wrong time.</p><p>After a timeout.</p><p>After a crash.</p><p>After a failover.</p><p>After the consumer has already committed the business operation.</p><p>Production systems are not defined by what happens when everything works.</p><p>They are defined by what happens when everything <strong>almost</strong> works.</p><p>That is why:</p><p><strong>At-Least-Once + Idempotency</strong><br>beats pretending the network can guarantee exactly-once execution.</p><p><strong>Anti-Corruption Layers</strong><br>beat leaking legacy models across new boundaries.</p><p><strong>Read Models</strong><br>beat sending every AI and API query to the transactional core.</p><p>And:</p><p><strong>Event-driven architecture</strong><br>beats asking a legacy database the same question every 15 seconds.</p><p>The goal is not to make the old system disappear.</p><p>The goal is to make it <strong>stop being the failure domain for everything around it.</strong></p>
